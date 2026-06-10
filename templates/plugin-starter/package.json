@@ -1,0 +1,29 @@
+{
+  "name": "{{PLUGIN_ID}}",
+  "version": "0.1.0",
+  "description": "{{PLUGIN_DESCRIPTION}}",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "jimcast": {
+    "name": "{{PLUGIN_NAME}}",
+    "description": "{{PLUGIN_DESCRIPTION}}"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@jimcast/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0",
+    "@types/node": "^20.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
