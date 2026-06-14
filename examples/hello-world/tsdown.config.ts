@@ -14,11 +14,8 @@ export default defineConfig({
   onSuccess: async () => {
     const { execSync } = await import("child_process");
     execSync(
-      `
-      mkdir -p ~/.jimcast/plugins/hello-world/dist && 
-      cp dist/main.mjs ~/.jimcast/plugins/hello-world/dist/ && 
-      cp package.json ~/.jimcast/plugins/hello-world/
-      `
+      "mkdir -p ~/.jimcast/plugins/hello-world/dist && cp dist/main.mjs ~/.jimcast/plugins/hello-world/dist/ && cp package.json ~/.jimcast/plugins/hello-world/",
+      { shell: "/bin/bash" }
     );
   },
 });
