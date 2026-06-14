@@ -1,0 +1,20 @@
+// src/themes/catppuccin.ts  (mocha)
+export const catppuccin = {
+  name:         'catppuccin',
+  bg:           '#1e1e2e',
+  bg1:          '#181825',
+  bg2:          '#313244',
+  bg4:          '#6c7086',
+  fg:           '#cdd6f4',
+  fg2:          '#bac2de',
+  fg4:          '#6c7086',
+  brightRed:    '#f38ba8',
+  brightGreen:  '#a6e3a1',
+  brightYellow: '#f9e2af',
+  brightBlue:   '#89b4fa',
+  brightAqua:   '#94e2d5',
+  brightPurple: '#cba4f7',
+  aqua:         '#74c7ec',
+  blue:         '#89b4fa',
+  purple:       '#cba4f7',
+}

@@ -1,0 +1,20 @@
+// src/themes/gruvbox-light.ts
+export const gruvboxLight = {
+  name:         'gruvbox-light',
+  bg:           '#fbf1c7',
+  bg1:          '#ebdbb2',
+  bg2:          '#d5c4a1',
+  bg4:          '#bdae93',
+  fg:           '#3c3836',
+  fg2:          '#504945',
+  fg4:          '#7c6f64',
+  brightRed:    '#9d0006',
+  brightGreen:  '#79740e',
+  brightYellow: '#b57614',
+  brightBlue:   '#076678',
+  brightAqua:   '#427b58',
+  brightPurple: '#8f3f71',
+  aqua:         '#427b58',
+  blue:         '#076678',
+  purple:       '#8f3f71',
+}

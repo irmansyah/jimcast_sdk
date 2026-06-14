@@ -3,19 +3,21 @@
   "version": "0.1.0",
   "description": "A minimal Jimcast plugin example",
   "private": true,
+  "author": "irmansyah",
+  "license": "MIT",
   "type": "module",
-  "main": "./dist/index.js",
+  "main": "./dist/main.mjs",
   "scripts": {
-    "build": "tsup",
+    "build": "tsdown",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@jimcast/sdk": "workspace:*"
+    "@jimcast/sdk": "file:/Users/mane/works/_startup/jimcast/jimcast-sdk/packages/sdk"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "tsup": "^8.5.1",
-    "typescript": "^5.4.0"
+    "@types/node": "^25.9.3",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3"
   }
 }

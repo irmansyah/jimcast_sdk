@@ -1,6 +1,6 @@
 import { spawn } from "child_process";
 
-const plugin = spawn("node", ["dist/main.js"], {
+const plugin = spawn("node", ["dist/main.mjs"], {
   stdio: ["pipe", "pipe", "inherit"],
 });
 

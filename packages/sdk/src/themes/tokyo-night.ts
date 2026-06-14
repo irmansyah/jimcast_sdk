@@ -1,0 +1,20 @@
+// src/themes/tokyo-night.ts
+export const tokyoNight = {
+  name:         'tokyo-night',
+  bg:           '#1a1b26',
+  bg1:          '#16161e',
+  bg2:          '#2f3549',
+  bg4:          '#565f89',
+  fg:           '#c0caf5',
+  fg2:          '#a9b1d6',
+  fg4:          '#565f89',
+  brightRed:    '#f7768e',
+  brightGreen:  '#9ece6a',
+  brightYellow: '#e0af68',
+  brightBlue:   '#7aa2f7',
+  brightAqua:   '#73daca',
+  brightPurple: '#bb9af7',
+  aqua:         '#2ac3de',
+  blue:         '#7aa2f7',
+  purple:       '#9d7cd8',
+}

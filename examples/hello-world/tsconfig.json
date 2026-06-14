@@ -1,11 +1,12 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "/Users/mane/works/_startup/jimcast/jimcast-sdk/tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "types": ["node"]
   },
   "include": ["src"],
   "references": [
-    { "path": "../../packages/sdk" }
+    { "path": "/Users/mane/works/_startup/jimcast/jimcast-sdk/packages/sdk" }
   ]
 }

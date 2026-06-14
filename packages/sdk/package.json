@@ -24,8 +24,8 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsup --tsconfig tsconfig.build.json",
-    "dev": "tsup --watch",
+    "build": "tsdown --tsconfig tsconfig.build.json",
+    "dev": "tsdown --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -33,10 +33,10 @@
     "clean": "rm -rf dist"
   },
   "devDependencies": {
-    "tsup": "^8.0.0",
-    "typescript": "^5.4.0",
-    "vitest": "^1.4.0",
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.19.43",
+    "tsdown": "^0.22.2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.8"
   },
   "engines": {
     "node": ">=18.0.0"

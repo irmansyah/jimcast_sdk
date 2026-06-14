@@ -1,0 +1,20 @@
+// src/themes/default.ts  (gruvbox dark)
+export const gruvboxDark = {
+  name:         'gruvbox-dark',
+  bg:           '#1d2021',
+  bg1:          '#282828',
+  bg2:          '#32302f',
+  bg4:          '#7c6f64',
+  fg:           '#ebdbb2',
+  fg2:          '#d5c4a1',
+  fg4:          '#a89984',
+  brightRed:    '#fb4934',
+  brightGreen:  '#b8bb26',
+  brightYellow: '#fabd2f',
+  brightBlue:   '#83a598',
+  brightAqua:   '#8ec07c',
+  brightPurple: '#d3869b',
+  aqua:         '#689d6a',
+  blue:         '#458588',
+  purple:       '#b16286',
+}

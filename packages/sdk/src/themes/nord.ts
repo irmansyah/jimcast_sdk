@@ -1,0 +1,20 @@
+// src/themes/nord.ts
+export const nord = {
+  name:         'nord',
+  bg:           '#2e3440',
+  bg1:          '#3b4252',
+  bg2:          '#434c5e',
+  bg4:          '#616e88',
+  fg:           '#eceff4',
+  fg2:          '#e5e9f0',
+  fg4:          '#616e88',
+  brightRed:    '#bf616a',
+  brightGreen:  '#a3be8c',
+  brightYellow: '#ebcb8b',
+  brightBlue:   '#81a1c1',
+  brightAqua:   '#88c0d0',
+  brightPurple: '#b48ead',
+  aqua:         '#8fbcbb',
+  blue:         '#5e81ac',
+  purple:       '#b48ead',
+}
