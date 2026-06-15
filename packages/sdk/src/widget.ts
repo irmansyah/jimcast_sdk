@@ -23,17 +23,30 @@ export type WidgetBadge = {
   readonly color?: "default" | "green" | "red" | "yellow" | "blue" | "purple";
 };
 
+export type WidgetCard = {
+  readonly id: string;
+  readonly icon?: string;
+  readonly title: string;
+  readonly sub?: string;
+  readonly right?: string;
+  onAction?(): Promise<void>;
+};
+
 /**
  * What a widget's render() can return.
  *
  * - `rows`   — a key/value list, good for status info (branch, PRs, env vars)
  * - `text`   — a single line or short paragraph of text
  * - `badges` — a horizontal row of pills, good for tags or states
+ * - `grid-2` — 2-column card grid
+ * - `grid-3` — 3-column card grid
  */
 export type WidgetContent =
-  | { readonly type: "rows"; readonly rows: readonly WidgetRow[] }
-  | { readonly type: "text"; readonly content: string }
-  | { readonly type: "badges"; readonly badges: readonly WidgetBadge[] };
+  | { readonly type: "rows";    readonly rows: readonly WidgetRow[] }
+  | { readonly type: "text";    readonly content: string }
+  | { readonly type: "badges";  readonly badges: readonly WidgetBadge[] }
+  | { readonly type: "grid-2";  readonly cards: readonly WidgetCard[] }
+  | { readonly type: "grid-3";  readonly cards: readonly WidgetCard[] };
 
 // ---------------------------------------------------------------------------
 // Slot

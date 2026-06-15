@@ -92,4 +92,5 @@ export type {
   WidgetRow,
   WidgetBadge,
   WidgetSlot,
+  WidgetCard,
 } from "./widget.js";
