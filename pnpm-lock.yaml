@@ -65,7 +65,7 @@ importers:
   templates/plugin-starter:
     dependencies:
       '@jimcast/sdk':
-        specifier: workspace:*
+        specifier: file:/Users/mane/works/_startup/jimcast/jimcast-sdk/packages/sdk
         version: link:../../packages/sdk
     devDependencies:
       '@types/node':

@@ -10,18 +10,19 @@
     "description": "{{PLUGIN_DESCRIPTION}}"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsdown",
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
-    "@jimcast/sdk": "workspace:*"
+    "@jimcast/sdk": "file:/Users/mane/works/_startup/jimcast/jimcast-sdk/packages/sdk"
   },
   "devDependencies": {
-    "typescript": "^5.4.0",
     "vitest": "^1.4.0",
-    "@types/node": "^20.0.0"
+    "@types/node": "^25.9.3",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3"
   },
   "engines": {
     "node": ">=18.0.0"

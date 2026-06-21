@@ -1,4 +1,6 @@
 import { defineConfig } from "tsdown";
+import { execSync } from "child_process";
+import { basename } from "path";
 
 export default defineConfig({
   entry: ["src/main.ts"],
@@ -14,9 +16,9 @@ export default defineConfig({
     sourcemap: false,
   },
   onSuccess: async () => {
-    const { execSync } = await import("child_process");
+    const pluginDir = `~/.jimcast/plugins/${basename(process.cwd())}`;
     execSync(
-      "mkdir -p ~/.jimcast/plugins/hello-world/dist && cp dist/main.mjs ~/.jimcast/plugins/hello-world/dist/ && cp package.json ~/.jimcast/plugins/hello-world/"
+      `mkdir -p ${pluginDir}/dist && cp dist/main.mjs ${pluginDir}/dist/ && cp package.json ${pluginDir}/`
     );
   },
 });

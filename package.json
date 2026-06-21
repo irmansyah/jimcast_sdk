@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "description": "Jimcast plugin SDK monorepo",
   "scripts": {
-    "build": "pnpm -r build",
+    "build": "pnpm -r --filter '!./templates/**' build",
     "dev": "pnpm -r dev",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
