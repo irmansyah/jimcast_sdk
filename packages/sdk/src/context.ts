@@ -250,4 +250,22 @@ export interface ExecutionContext {
    * @param url - The URL to open.
    */
   openUrl(url: string): Promise<void>;
+
+  /**
+   * Dismisses the Jimcast command bar.
+   *
+   * Call this after completing an action that should close the UI — for
+   * example, after launching an application or opening a file.
+   *
+   * Safe to call from inside `execute()` or any `onAction` handler.
+   *
+   * @example
+   * ```typescript
+   * async onAction() {
+   *   await context.exec(`open -a "${app.id}"`);
+   *   await context.dismiss();
+   * }
+   * ```
+   */
+  dismiss(): Promise<void>;
 }

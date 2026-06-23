@@ -11,6 +11,7 @@
 import { createInterface } from "node:readline";
 import type { Plugin } from "./command.js";
 import type { ProjectContext, EnvContext, ExecutionContext } from "./context.js";
+import type { CommandItem } from "./ui.js";
 import { createStorage } from "./storage.js";
 
 // ---------------------------------------------------------------------------
@@ -82,7 +83,6 @@ export class RpcTransport {
       }
 
       if ("command" in message) {
-        // Incoming request from core
         const req = message as CoreRequest;
         this.onRequest(req.command, req.args, req.id).then(
           (result) => this.respond(req.id, result),
@@ -92,7 +92,6 @@ export class RpcTransport {
           },
         );
       } else {
-        // Response to one of our requests
         const res = message as CoreResponse;
         const pending = this.pending.get(res.id);
         if (!pending) return;
@@ -115,7 +114,7 @@ export class RpcTransport {
 export async function bootstrapPlugin(plugin: Plugin): Promise<void> {
   let transport: RpcTransport;
 
-  const handler = async (command: string, args: unknown, id: string): Promise<unknown> => {
+  const handler = async (command: string, args: unknown): Promise<unknown> => {
     return handleCoreRequest(command, args, plugin, transport!);
   };
 
@@ -132,6 +131,8 @@ async function handleCoreRequest(
   plugin: Plugin,
   transport: RpcTransport,
 ): Promise<unknown> {
+
+  // ── executeCommand ────────────────────────────────────────────────────────
   if (command === "executeCommand") {
     const { commandId, projectContext, envContext } = args as {
       commandId: string;
@@ -147,14 +148,47 @@ async function handleCoreRequest(
     return { items: result ?? [] };
   }
 
-  if (command === "renderWidget") {
-    const { widgetId, projectContext, envContext } = args as {
-      widgetId: string;
+  // ── activateItem ──────────────────────────────────────────────────────────
+  // Called when the user selects an item from the command bar.
+  // Re-executes the command to get fresh items, finds the matching item by id,
+  // then runs its default action (first action, or the one matching actionId).
+  if (command === "activateItem") {
+    const { commandId, itemId, actionId, projectContext, envContext } = args as {
+      commandId:      string;
+      itemId:         string;
+      actionId?:      string;
       projectContext: ProjectContext;
-      envContext: EnvContext;
+      envContext:     EnvContext;
     };
 
-    const widget = plugin.widgets?.find(w => w.id === widgetId);
+    const cmd = findCommand(plugin, commandId);
+    if (!cmd) throw new Error(`Unknown command: ${commandId}`);
+
+    const context = buildContext(projectContext, envContext, transport);
+    const items = (await cmd.execute(context) ?? []) as CommandItem[];
+
+    const item = items.find((i) => i.id === itemId);
+    if (!item) throw new Error(`Unknown item: ${itemId}`);
+
+    const action = actionId
+      ? item.actions?.find((a) => a.id === actionId)
+      : item.actions?.[0];
+
+    if (!action) throw new Error(`No action found for item: ${itemId}`);
+
+    await action.onAction();
+    return { ok: true };
+  }
+
+  // ── renderWidget ──────────────────────────────────────────────────────────
+  if (command === "renderWidget") {
+    const { widgetId, projectContext, envContext } = args as {
+      widgetId:       string;
+      projectContext: ProjectContext;
+      envContext:     EnvContext;
+    };
+
+    const widget = plugin.widgets?.find((w) => w.id === widgetId);
     if (!widget) throw new Error(`Unknown widget: ${widgetId}`);
 
     const context = buildContext(projectContext, envContext, transport);
@@ -164,6 +198,10 @@ async function handleCoreRequest(
 
   throw new Error(`Unknown command: ${command}`);
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function findCommand(plugin: Plugin, commandId: string) {
   for (const entry of plugin.commands) {
@@ -224,6 +262,10 @@ function buildContext(
 
     async openUrl(url) {
       await send("ui.openUrl", { url });
+    },
+
+    async dismiss() {
+      await send("ui.dismiss", {});
     },
   };
 }
