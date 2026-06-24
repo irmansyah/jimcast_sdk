@@ -9,33 +9,61 @@
 import type { ExecutionContext } from "./context.js";
 
 // ---------------------------------------------------------------------------
+// Color tokens
+// ---------------------------------------------------------------------------
+
+/**
+ * Named color presets for widget elements.
+ * These map to the host theme's Gruvbox palette.
+ *
+ * The `(string & {})` tail keeps autocomplete for named presets while
+ * also accepting any raw hex value from `context.host.theme.colors`.
+ */
+export type WidgetColor =
+  | "default"
+  | "green"
+  | "red"
+  | "yellow"
+  | "blue"
+  | "purple"
+  | "aqua"
+  | "orange"
+  | (string & {});
+
+// ---------------------------------------------------------------------------
 // Widget content types
 // ---------------------------------------------------------------------------
 
 export type WidgetRow = {
   readonly label: string;
-  readonly value: string;
-  readonly valueColor?: "default" | "green" | "red" | "yellow" | "blue";
+  readonly labelColor?: WidgetColor;
+  readonly value?: string;
+  readonly valueColor?: WidgetColor;
+  readonly accessory?: string;
+  readonly accessoryColor?: WidgetColor;
 };
 
 export type WidgetBadge = {
   readonly label: string;
-  readonly color?: "default" | "green" | "red" | "yellow" | "blue" | "purple";
+  readonly color?: WidgetColor;
 };
 
 export type WidgetCard = {
   readonly id: string;
   readonly icon?: string;
   readonly title: string;
+  readonly titleColor?: WidgetColor;
   readonly sub?: string;
+  readonly subColor?: WidgetColor;
   readonly right?: string;
+  readonly rightColor?: WidgetColor;
   onAction?(): Promise<void>;
 };
 
 /**
  * What a widget's render() can return.
  *
- * - `rows`   — a key/value list, good for status info (branch, PRs, env vars)
+ * - `rows`   — a key/value list, good for status info (branch, env vars, etc.)
  * - `text`   — a single line or short paragraph of text
  * - `badges` — a horizontal row of pills, good for tags or states
  * - `grid-2` — 2-column card grid
@@ -43,7 +71,7 @@ export type WidgetCard = {
  */
 export type WidgetContent =
   | { readonly type: "rows";    readonly rows: readonly WidgetRow[] }
-  | { readonly type: "text";    readonly content: string }
+  | { readonly type: "text";    readonly content: string; readonly color?: WidgetColor }
   | { readonly type: "badges";  readonly badges: readonly WidgetBadge[] }
   | { readonly type: "grid-2";  readonly cards: readonly WidgetCard[] }
   | { readonly type: "grid-3";  readonly cards: readonly WidgetCard[] };
@@ -60,8 +88,6 @@ export type WidgetContent =
  * ┌─────────────────┐
  * │   top           │
  * │─────────────────│
- * │   GitContext    │
- * │─────────────────│
  * │   above-input   │
  * │─────────────────│
  * │   Search input  │
@@ -71,12 +97,12 @@ export type WidgetContent =
  * │   Results list  │
  * │─────────────────│
  * │   below-results │
- * │─────────────────│
- * │   Footer        │
  * └─────────────────┘
  * ```
  */
-export type WidgetSlot = "top" | "above-input" | "below-input" | "below-results";
+// export type WidgetSlot = "top" | "above-input" | "below-input" | "inside-scroll";
+export type WidgetSlot = "top" | 'above-input' | 'below-input' | 'inside-scroll'
+
 
 // ---------------------------------------------------------------------------
 // Widget definition
@@ -114,19 +140,6 @@ export interface Widget extends WidgetDefinition {
  *
  * @example
  * ```typescript
- * const branchWidget = createWidget({
- *   id: "git-status.branch-widget",
- *   defaultSlot: "below-input",
- *   async render(context) {
- *     return {
- *       type: "rows",
- *       rows: [
- *         { label: "branch", value: context.project.branch ?? "none" },
- *         { label: "open PRs", value: String(context.project.openPRs.length) },
- *       ],
- *     };
- *   },
- * });
  * ```
  */
 export function createWidget(definition: WidgetDefinition): Widget {
