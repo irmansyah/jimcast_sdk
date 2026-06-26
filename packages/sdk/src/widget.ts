@@ -9,44 +9,68 @@
 import type { ExecutionContext } from "./context.js";
 
 // ---------------------------------------------------------------------------
-// Widget content types
+// Color tokens
 // ---------------------------------------------------------------------------
 
-export type WidgetRow = {
-  readonly label: string;
-  readonly value: string;
-  readonly valueColor?: "default" | "green" | "red" | "yellow" | "blue";
-};
-
-export type WidgetBadge = {
-  readonly label: string;
-  readonly color?: "default" | "green" | "red" | "yellow" | "blue" | "purple";
-};
-
-export type WidgetCard = {
-  readonly id: string;
-  readonly icon?: string;
-  readonly title: string;
-  readonly sub?: string;
-  readonly right?: string;
-  onAction?(): Promise<void>;
-};
-
 /**
- * What a widget's render() can return.
+ * Named color presets for widget elements.
+ * These map to the host theme's Gruvbox palette.
  *
- * - `rows`   — a key/value list, good for status info (branch, PRs, env vars)
- * - `text`   — a single line or short paragraph of text
- * - `badges` — a horizontal row of pills, good for tags or states
- * - `grid-2` — 2-column card grid
- * - `grid-3` — 3-column card grid
+ * The `(string & {})` tail keeps autocomplete for named presets while
+ * also accepting any raw hex value from `context.host.theme.colors`.
  */
+export type WidgetColor =
+  | "default"
+  | "green"
+  | "red"
+  | "yellow"
+  | "blue"
+  | "purple"
+  | "aqua"
+  | "orange"
+  | (string & {});
+
+// ── Item / action ─────────────────────────────────────────────────────────────
+
+export interface WidgetAttribute {
+  label1:      string
+  label2?:     string
+  label3?:     string
+  label4?:     string
+  labelRight?: string
+  color1?:     string
+  color2?:     string
+  color3?:     string
+  color4?:     string
+  colorRight?: string
+  image?:      string
+}
+
+export interface WidgetAction {
+  cmd:               string
+  params?:           Record<string, string>
+  ignore_exit_code?: boolean
+  timeout_secs?:     number
+  then?:             'refresh' | 'dismiss' | 'both'
+}
+
+export interface WidgetItem {
+  id:          string
+  attribute?:  WidgetAttribute
+  params?:     Record<string, string>
+  action?:     WidgetAction
+}
+
 export type WidgetContent =
-  | { readonly type: "rows";    readonly rows: readonly WidgetRow[] }
-  | { readonly type: "text";    readonly content: string }
-  | { readonly type: "badges";  readonly badges: readonly WidgetBadge[] }
-  | { readonly type: "grid-2";  readonly cards: readonly WidgetCard[] }
-  | { readonly type: "grid-3";  readonly cards: readonly WidgetCard[] };
+  | { readonly type: 'text';    readonly data:    string;                }
+  | { readonly type: 'error';   readonly message: string;                }
+  | { readonly type: 'divider'; readonly data?:   string;                }
+  | { readonly type: 'rows';    readonly datas:   readonly WidgetItem[]; }
+  | { readonly type: 'columns'; readonly datas:   readonly WidgetItem[]; }
+  | { readonly type: 'list';    readonly datas:   readonly WidgetItem[]; }
+  | { readonly type: 'badges';  readonly datas:   readonly WidgetItem[]; }
+  | { readonly type: 'grid-2';  readonly datas:   readonly WidgetItem[]; }
+  | { readonly type: 'grid-3';  readonly datas:   readonly WidgetItem[]; }
 
 // ---------------------------------------------------------------------------
 // Slot
@@ -60,8 +84,6 @@ export type WidgetContent =
  * ┌─────────────────┐
  * │   top           │
  * │─────────────────│
- * │   GitContext    │
- * │─────────────────│
  * │   above-input   │
  * │─────────────────│
  * │   Search input  │
@@ -69,35 +91,22 @@ export type WidgetContent =
  * │   below-input   │
  * │─────────────────│
  * │   Results list  │
- * │─────────────────│
- * │   below-results │
- * │─────────────────│
- * │   Footer        │
  * └─────────────────┘
  * ```
  */
-export type WidgetSlot = "top" | "above-input" | "below-input" | "below-results";
+// export type WidgetSlot = "top" | "above-input" | "below-input" | "inside-scroll";
+export type WidgetSlot = 'above-input' | 'below-input' | 'inside-scroll'
+
 
 // ---------------------------------------------------------------------------
 // Widget definition
 // ---------------------------------------------------------------------------
 
 export interface WidgetDefinition {
-  /**
-   * Globally unique identifier. Convention: `plugin-name.widget-name`.
-   */
   readonly id: string;
 
-  /**
-   * The slot this widget occupies by default.
-   * Users can override in ~/.jimcast/config.json.
-   */
   readonly defaultSlot: WidgetSlot;
 
-  /**
-   * Called once when the command bar opens.
-   * Return the content to display.
-   */
   render(context: ExecutionContext): Promise<WidgetContent>;
 }
 
@@ -114,19 +123,6 @@ export interface Widget extends WidgetDefinition {
  *
  * @example
  * ```typescript
- * const branchWidget = createWidget({
- *   id: "git-status.branch-widget",
- *   defaultSlot: "below-input",
- *   async render(context) {
- *     return {
- *       type: "rows",
- *       rows: [
- *         { label: "branch", value: context.project.branch ?? "none" },
- *         { label: "open PRs", value: String(context.project.openPRs.length) },
- *       ],
- *     };
- *   },
- * });
  * ```
  */
 export function createWidget(definition: WidgetDefinition): Widget {

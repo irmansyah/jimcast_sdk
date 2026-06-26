@@ -1,18 +1,33 @@
-import { gruvboxDark  } from './default'
-import { gruvboxLight } from './gruvbox-light'
-import { tokyoNight   } from './tokyo-night'
-import { catppuccin   } from './catppuccin'
-import { nord         } from './nord'
+import type { ThemeContext } from "../context.js";
+import { defaultTheme }     from "./default.js";
+import { gruvboxLightTheme } from "./gruvbox-light.js";
+import { catppuccinTheme }  from "./catppuccin.js";
+import { nordTheme }        from "./nord.js";
+import { tokyoNightTheme }  from "./tokyo-night.js";
 
-export type Theme = typeof gruvboxDark
+export { defaultTheme, gruvboxLightTheme, catppuccinTheme, nordTheme, tokyoNightTheme };
 
-// all built-in themes keyed by the name used in theme.toml
-export const THEMES: Record<string, Theme> = {
-  'gruvbox-dark':  gruvboxDark,
-  'gruvbox-light': gruvboxLight,
-  'tokyo-night':   tokyoNight,
-  'catppuccin':    catppuccin,
-  'nord':          nord,
+export type ThemeName =
+  | "gruvbox-dark"
+  | "gruvbox-light"
+  | "catppuccin"
+  | "nord"
+  | "tokyo-night";
+
+const themes: Record<ThemeName, ThemeContext> = {
+  "gruvbox-dark":  defaultTheme,
+  "gruvbox-light": gruvboxLightTheme,
+  "catppuccin":    catppuccinTheme,
+  "nord":          nordTheme,
+  "tokyo-night":   tokyoNightTheme,
+};
+
+export function resolveTheme(name: string | undefined): ThemeContext {
+  if (name && name in themes) {
+    return themes[name as ThemeName];
+  }
+  if (name) {
+    console.warn(`[jimcast-sdk] unknown theme "${name}", falling back to gruvbox-dark`);
+  }
+  return defaultTheme;
 }
-
-export const DEFAULT_THEME = gruvboxDark

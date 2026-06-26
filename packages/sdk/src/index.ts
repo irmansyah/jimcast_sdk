@@ -1,3 +1,5 @@
+// packages/sdk/src/index.ts
+
 /**
  * @jimcast/sdk
  *
@@ -33,7 +35,6 @@ export {
   createCommand,
   createCommandGroup,
 } from "./command.js";
-
 export type {
   Command,
   CommandDefinition,
@@ -52,11 +53,14 @@ export type {
 
 // Execution context
 export type {
-  Commit,
+  // ProjectContext,
+  HostContext,
+  ThemeContext,
+  ThemeColors,
+  ThemeTypography,
+  ThemeSpacing,
   EnvContext,
   ExecutionContext,
-  PR,
-  ProjectContext,
   ToastOptions,
 } from "./context.js";
 
@@ -65,7 +69,6 @@ export {
   execFailed,
   execSucceeded,
 } from "./process.js";
-
 export type {
   ExecOptions,
   ExecResult,
@@ -78,19 +81,20 @@ export type {
   PluginStorage,
 } from "./storage.js";
 
-// rpc.ts
-export { 
-  bootstrapPlugin 
+// RPC bootstrap (runtime-only, not for plugin authors)
+export {
+  bootstrapPlugin,
 } from "./rpc.js";
 
+// Widget
 export { createWidget } from "./widget.js";
-
 export type {
   Widget,
   WidgetContent,
   WidgetDefinition,
-  WidgetRow,
-  WidgetBadge,
   WidgetSlot,
-  WidgetCard,
 } from "./widget.js";
+
+// Themes
+export { resolveTheme, defaultTheme } from "./themes/index.js";
+export type { ThemeName } from "./themes/index.js";

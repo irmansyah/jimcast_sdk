@@ -13,32 +13,6 @@ import type { PluginStorage } from "./storage.js";
 import type { ExecOptions, ExecResult, ExecStreamOptions } from "./process.js";
 
 // ---------------------------------------------------------------------------
-// Git / project types
-// ---------------------------------------------------------------------------
-
-/** A pull request visible on the current repo's remote. */
-export interface PR {
-  readonly number: number;
-  readonly title: string;
-  readonly url: string;
-  readonly state: "open" | "draft" | "merged" | "closed";
-  readonly author: string;
-  /** ISO 8601 date string */
-  readonly updatedAt: string;
-}
-
-/** A recent commit on the current branch. */
-export interface Commit {
-  readonly sha: string;
-  /** Short (7-char) SHA for display. */
-  readonly shortSha: string;
-  readonly message: string;
-  readonly author: string;
-  /** ISO 8601 date string */
-  readonly date: string;
-}
-
-// ---------------------------------------------------------------------------
 // ProjectContext
 // ---------------------------------------------------------------------------
 
@@ -46,43 +20,141 @@ export interface Commit {
  * Snapshot of the current project state, provided by Jimcast core.
  *
  * This is computed once when the command fires — it will not change mid-execution.
- * If you need fresh data (e.g. after running `git fetch`), call `context.exec()`
+ * If you need fresh data (e.g. after running a shell command), call `context.exec()`
  * and parse the output yourself.
  */
-export interface ProjectContext {
+// export interface ProjectContext {
+//   /**
+//    * Absolute path to the working directory Jimcast is currently focused on.
+//    * This is the directory your shell commands will run in.
+//    */
+//   readonly cwd: string;
+// }
+
+// ---------------------------------------------------------------------------
+// ThemeContext
+// ---------------------------------------------------------------------------
+export interface ThemeColors {
+  readonly bg: string;
+  readonly bg1: string;
+  readonly bg2: string;
+  readonly bg3: string;
+  readonly bg4: string;
+  readonly fg: string;
+  readonly fg2: string;
+  readonly fg3: string;
+  readonly fg4: string;
+  readonly red: string;
+  readonly brightRed: string;
+  readonly green: string;
+  readonly brightGreen: string;
+  readonly yellow: string;
+  readonly brightYellow: string;
+  readonly blue: string;
+  readonly brightBlue: string;
+  readonly purple: string;
+  readonly brightPurple: string;
+  readonly aqua: string;
+  readonly brightAqua: string;
+  readonly orange: string;
+  readonly brightOrange: string;
+}
+
+export interface ThemeTypography {
+  readonly family: string;
+  readonly xs: number;
+  readonly sm: number;
+  readonly md: number;
+  readonly lg: number;
+  readonly xl: number;
+}
+
+export interface ThemeSpacing {
+  readonly radiusSm: number;
+  readonly radiusMd: number;
+  readonly radiusLg: number;
+  readonly gapSm: number;
+  readonly gapMd: number;
+  readonly gapLg: number;
+}
+
+/**
+ * The host application's current visual theme.
+ *
+ * All values are resolved at command fire time — they reflect what the user
+ * actually sees, including any overrides from their settings.
+ *
+ * Use these to style any UI your plugin renders instead of hardcoding values.
+ *
+ * @example
+ * ```typescript
+ * const { primary } = context.host.theme.colors;
+ * const { mode } = context.host.theme;
+ * ```
+ */
+export interface ThemeContext {
+  /** Current color mode. */
+  readonly mode: "light" | "dark";
+  readonly colors: ThemeColors;
+  readonly typography: ThemeTypography;
+  readonly spacing: ThemeSpacing;
+}
+
+// ---------------------------------------------------------------------------
+// HostContext
+// ---------------------------------------------------------------------------
+
+/**
+ * Everything the Jimcast host exposes about itself to plugins.
+ *
+ * This is intentionally open-ended: Jimcast ships `theme` and `project` here,
+ * and third-party host integrations (CI providers, issue trackers, etc.) can
+ * extend it via the provider registry without touching the core SDK types.
+ *
+ * @example
+ * ```typescript
+ * // Theme
+ * const { primary } = context.host.theme.colors;
+ *
+ * // Project
+ * const { cwd } = context.host.project ?? {};
+ *
+ * // Custom provider (type-augmented via module declaration merging)
+ * const issue = context.host.providers.linearIssueTracker?.currentIssue;
+ * ```
+ */
+export interface HostContext {
   /**
-   * Absolute path to the working directory Jimcast is currently focused on.
-   * This is the directory your shell commands will run in.
+   * The host application's current visual theme.
+   * Safe to read even when no project is open.
    */
-  readonly cwd: string;
+  readonly theme: ThemeContext;
 
   /**
-   * Absolute path to the root of the git repository, or `null` if the
-   * current directory is not inside a git repo.
+   * Current project state, or `null` if Jimcast is running without
+   * an open project (e.g. in a global command palette).
    */
-  readonly repoRoot: string | null;
+  // readonly project: ProjectContext | null;
 
   /**
-   * Current branch name, or `null` if not in a git repo or in detached HEAD state.
+   * Escape hatch for host-registered providers.
+   *
+   * Providers are declared in `jimcast.config.ts` and type-augmented
+   * via module declaration merging, so downstream plugins stay fully typed.
+   *
+   * @example
+   * ```typescript
+   * // Augment in your plugin's type declarations:
+   * declare module "@jimcast/sdk" {
+   *   interface HostContext {
+   *     providers: {
+   *       linearIssueTracker?: { currentIssue: string };
+   *     };
+   *   }
+   * }
+   * ```
    */
-  readonly branch: string | null;
-
-  /**
-   * Name of the configured remote (typically `"origin"`), or `null`.
-   */
-  readonly remoteName: string | null;
-
-  /**
-   * Open pull requests on the current repo, fetched from the remote at startup.
-   * Empty array if the repo has no open PRs or if fetching failed.
-   */
-  readonly openPRs: readonly PR[];
-
-  /**
-   * The most recent commits on the current branch (up to 20).
-   * Empty array if not in a git repo.
-   */
-  readonly recentCommits: readonly Commit[];
+  readonly providers: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------------
@@ -94,14 +166,12 @@ export interface ProjectContext {
  */
 export interface EnvContext {
   /**
-   * The version of Jimcast core that is running this plugin.
+   * The version of Jimcast core running this plugin.
    * Follows semver — e.g. `"1.3.0"`.
    */
   readonly jimcastVersion: string;
 
-  /**
-   * The user's platform.
-   */
+  /** The user's platform. */
   readonly platform: "macos" | "linux" | "windows";
 
   /**
@@ -151,28 +221,31 @@ export interface ToastOptions {
  * interface, your plugin cannot do it.
  */
 export interface ExecutionContext {
-  /** State of the current project when the command fired. */
-  readonly project: ProjectContext;
-
   /** Information about the Jimcast runtime environment. */
   readonly env: EnvContext;
 
+  /**
+   * Generic host data: theme, project, and any registered providers.
+   */
+  readonly host: HostContext;
+
   /** Persistent key-value storage, scoped to this plugin. */
   readonly storage: PluginStorage;
+
+  /**
+   * @deprecated Use `context.host.project` instead. Will be removed in v2.
+   */
+  // readonly project: ProjectContext;
 
   // -------------------------------------------------------------------------
   // Shell execution
   // -------------------------------------------------------------------------
 
   /**
-   * Runs a shell command in the current project's working directory and
-   * returns the result when it completes.
-   *
-   * The command runs in a sandboxed subprocess — it cannot affect the
-   * Jimcast process itself.
+   * Runs a shell command and returns the result when it completes.
    *
    * @param command - The shell command string, e.g. `"git status --short"`.
-   * @param options - Optional execution options (timeout, env vars, etc.).
+   * @param options - Optional execution options (timeout, env overrides, etc.).
    * @returns The command's stdout, stderr, and exit code.
    *
    * @example

@@ -10,8 +10,15 @@
 
 import { createInterface } from "node:readline";
 import type { Plugin } from "./command.js";
-import type { ProjectContext, EnvContext, ExecutionContext } from "./context.js";
+import type {
+  EnvContext,
+  ExecutionContext,
+  HostContext,
+  ToastOptions,
+} from "./context.js";
 import { createStorage } from "./storage.js";
+import type { ExecOptions, ExecResult } from "./process.js";
+import { resolveTheme } from "./themes/index.js";
 
 // ---------------------------------------------------------------------------
 // Protocol types
@@ -34,14 +41,14 @@ interface CoreResponse {
 // ---------------------------------------------------------------------------
 
 type PendingResolve = (value: unknown) => void;
-type PendingReject = (reason: Error) => void;
+type PendingReject  = (reason: Error) => void;
 
 export class RpcTransport {
   private readonly pending = new Map<string, [PendingResolve, PendingReject]>();
 
   constructor(
-    private readonly stdin: NodeJS.ReadableStream,
-    private readonly stdout: NodeJS.WritableStream,
+    private readonly stdin:     NodeJS.ReadableStream,
+    private readonly stdout:    NodeJS.WritableStream,
     private readonly onRequest: (command: string, args: unknown, id: string) => Promise<unknown>,
   ) {
     this.listen();
@@ -82,7 +89,6 @@ export class RpcTransport {
       }
 
       if ("command" in message) {
-        // Incoming request from core
         const req = message as CoreRequest;
         this.onRequest(req.command, req.args, req.id).then(
           (result) => this.respond(req.id, result),
@@ -92,8 +98,7 @@ export class RpcTransport {
           },
         );
       } else {
-        // Response to one of our requests
-        const res = message as CoreResponse;
+        const res     = message as CoreResponse;
         const pending = this.pending.get(res.id);
         if (!pending) return;
         this.pending.delete(res.id);
@@ -115,7 +120,7 @@ export class RpcTransport {
 export async function bootstrapPlugin(plugin: Plugin): Promise<void> {
   let transport: RpcTransport;
 
-  const handler = async (command: string, args: unknown, id: string): Promise<unknown> => {
+  const handler = async (command: string, args: unknown): Promise<unknown> => {
     return handleCoreRequest(command, args, plugin, transport!);
   };
 
@@ -133,31 +138,31 @@ async function handleCoreRequest(
   transport: RpcTransport,
 ): Promise<unknown> {
   if (command === "executeCommand") {
-    const { commandId, projectContext, envContext } = args as {
+    const { commandId, envContext, hostContext: rawHost } = args as {
       commandId: string;
-      projectContext: ProjectContext;
       envContext: EnvContext;
+      hostContext: { themeName?: string; project: { cwd: string } | null; providers?: Record<string, unknown> };
     };
 
     const cmd = findCommand(plugin, commandId);
     if (!cmd) throw new Error(`Unknown command: ${commandId}`);
 
-    const context = buildContext(projectContext, envContext, transport);
-    const result = await cmd.execute(context);
+    const context = buildContext(envContext, buildHostContext(rawHost), transport);
+    const result  = await cmd.execute(context);
     return { items: result ?? [] };
   }
 
   if (command === "renderWidget") {
-    const { widgetId, projectContext, envContext } = args as {
+    const { widgetId, envContext, hostContext: rawHost } = args as {
       widgetId: string;
-      projectContext: ProjectContext;
       envContext: EnvContext;
+      hostContext: { themeName?: string; project: { cwd: string } | null; providers?: Record<string, unknown> };
     };
 
-    const widget = plugin.widgets?.find(w => w.id === widgetId);
+    const widget = plugin.widgets?.find((w) => w.id === widgetId);
     if (!widget) throw new Error(`Unknown widget: ${widgetId}`);
 
-    const context = buildContext(projectContext, envContext, transport);
+    const context = buildContext(envContext, buildHostContext(rawHost), transport);
     const content = await widget.render(context);
     return { content };
   }
@@ -177,27 +182,62 @@ function findCommand(plugin: Plugin, commandId: string) {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// Context builders
+// ---------------------------------------------------------------------------
+
+/** Raw wire shape of hostContext as sent by core. */
+interface RawHostContext {
+  themeName?: string;
+  project:    { cwd: string } | null;
+  providers?: Record<string, unknown>;
+}
+
+/**
+ * Deserialises the raw `hostContext` payload sent by core into a typed
+ * `HostContext`. Core sends only a theme name string — we resolve it to
+ * the full ThemeContext here so plugins never deal with raw color maps.
+ */
+function buildHostContext(raw: RawHostContext): HostContext {
+  return {
+    theme:     resolveTheme(raw.themeName),
+    // project:   raw.project ?? null,
+    providers: raw.providers ?? {},
+  };
+}
+
 function buildContext(
-  project: ProjectContext,
-  env: EnvContext,
+  env:      EnvContext,
+  host:     HostContext,
   transport: RpcTransport,
 ): ExecutionContext {
-  const send = (command: string, args: unknown) => transport.send(command, args);
+  const send    = (command: string, args: unknown) => transport.send(command, args);
   const storage = createStorage(send);
 
   return {
-    project,
     env,
+    host,
     storage,
 
-    async exec(command, options = {}) {
-      return send("exec", { command, options }) as ReturnType<ExecutionContext["exec"]>;
+    // // Deprecated — kept for backward compat, mirrors host.project
+    // project: host.project ?? { cwd: "" },
+
+    // async exec(command, options = {}) {
+    //   // return send("exec", { command, options }) as ReturnType<ExecutionContext["exec"]>;
+    //   return send("exec", { command, options }) as ReturnType<ExecutionContext["execStreamed"]>;
+    // },
+    
+    async exec(command: string, options: ExecOptions = {}): Promise<ExecResult> {
+      return send("exec", { command, options }) as Promise<ExecResult>;
     },
 
     async execStreamed(command, options) {
       const { onLine, onStderrLine, ...rest } = options;
       const result = await send("execStreamed", { command, options: rest }) as {
-        stdout: string; stderr: string; exitCode: number; timedOut: boolean;
+        stdout:   string;
+        stderr:   string;
+        exitCode: number;
+        timedOut: boolean;
       };
       for (const line of result.stdout.split("\n")) {
         if (line) onLine(line);
@@ -210,7 +250,7 @@ function buildContext(
       return result;
     },
 
-    async showToast(title, options = {}) {
+    async showToast(title: string, options: ToastOptions = {}): Promise<void> {
       await send("ui.showToast", { title, options });
     },
 
