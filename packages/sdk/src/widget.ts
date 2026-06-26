@@ -30,51 +30,47 @@ export type WidgetColor =
   | "orange"
   | (string & {});
 
-// ---------------------------------------------------------------------------
-// Widget content types
-// ---------------------------------------------------------------------------
+// ── Item / action ─────────────────────────────────────────────────────────────
 
-export type WidgetRow = {
-  readonly label: string;
-  readonly labelColor?: WidgetColor;
-  readonly value?: string;
-  readonly valueColor?: WidgetColor;
-  readonly accessory?: string;
-  readonly accessoryColor?: WidgetColor;
-};
+export interface WidgetAttribute {
+  label1:      string
+  label2?:     string
+  label3?:     string
+  label4?:     string
+  labelRight?: string
+  color1?:     string
+  color2?:     string
+  color3?:     string
+  color4?:     string
+  colorRight?: string
+  image?:      string
+}
 
-export type WidgetBadge = {
-  readonly label: string;
-  readonly color?: WidgetColor;
-};
+export interface WidgetAction {
+  cmd:               string
+  params?:           Record<string, string>
+  ignore_exit_code?: boolean
+  timeout_secs?:     number
+  then?:             'refresh' | 'dismiss' | 'both'
+}
 
-export type WidgetCard = {
-  readonly id: string;
-  readonly icon?: string;
-  readonly title: string;
-  readonly titleColor?: WidgetColor;
-  readonly sub?: string;
-  readonly subColor?: WidgetColor;
-  readonly right?: string;
-  readonly rightColor?: WidgetColor;
-  onAction?(): Promise<void>;
-};
+export interface WidgetItem {
+  id:          string
+  attribute?:  WidgetAttribute
+  params?:     Record<string, string>
+  action?:     WidgetAction
+}
 
-/**
- * What a widget's render() can return.
- *
- * - `rows`   — a key/value list, good for status info (branch, env vars, etc.)
- * - `text`   — a single line or short paragraph of text
- * - `badges` — a horizontal row of pills, good for tags or states
- * - `grid-2` — 2-column card grid
- * - `grid-3` — 3-column card grid
- */
 export type WidgetContent =
-  | { readonly type: "rows";    readonly rows: readonly WidgetRow[] }
-  | { readonly type: "text";    readonly content: string; readonly color?: WidgetColor }
-  | { readonly type: "badges";  readonly badges: readonly WidgetBadge[] }
-  | { readonly type: "grid-2";  readonly cards: readonly WidgetCard[] }
-  | { readonly type: "grid-3";  readonly cards: readonly WidgetCard[] };
+  | { readonly type: 'text';    readonly data:    string;                }
+  | { readonly type: 'error';   readonly message: string;                }
+  | { readonly type: 'divider'; readonly data?:   string;                }
+  | { readonly type: 'rows';    readonly datas:   readonly WidgetItem[]; }
+  | { readonly type: 'columns'; readonly datas:   readonly WidgetItem[]; }
+  | { readonly type: 'list';    readonly datas:   readonly WidgetItem[]; }
+  | { readonly type: 'badges';  readonly datas:   readonly WidgetItem[]; }
+  | { readonly type: 'grid-2';  readonly datas:   readonly WidgetItem[]; }
+  | { readonly type: 'grid-3';  readonly datas:   readonly WidgetItem[]; }
 
 // ---------------------------------------------------------------------------
 // Slot
@@ -95,13 +91,11 @@ export type WidgetContent =
  * │   below-input   │
  * │─────────────────│
  * │   Results list  │
- * │─────────────────│
- * │   below-results │
  * └─────────────────┘
  * ```
  */
 // export type WidgetSlot = "top" | "above-input" | "below-input" | "inside-scroll";
-export type WidgetSlot = "top" | 'above-input' | 'below-input' | 'inside-scroll'
+export type WidgetSlot = 'above-input' | 'below-input' | 'inside-scroll'
 
 
 // ---------------------------------------------------------------------------
@@ -109,21 +103,10 @@ export type WidgetSlot = "top" | 'above-input' | 'below-input' | 'inside-scroll'
 // ---------------------------------------------------------------------------
 
 export interface WidgetDefinition {
-  /**
-   * Globally unique identifier. Convention: `plugin-name.widget-name`.
-   */
   readonly id: string;
 
-  /**
-   * The slot this widget occupies by default.
-   * Users can override in ~/.jimcast/config.json.
-   */
   readonly defaultSlot: WidgetSlot;
 
-  /**
-   * Called once when the command bar opens.
-   * Return the content to display.
-   */
   render(context: ExecutionContext): Promise<WidgetContent>;
 }
 

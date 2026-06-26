@@ -14,11 +14,10 @@ import type {
   EnvContext,
   ExecutionContext,
   HostContext,
-  // ProjectContext,
   ToastOptions,
 } from "./context.js";
 import { createStorage } from "./storage.js";
-import type { ExecOptions, ExecResult, ExecStreamOptions } from "./process.js";
+import type { ExecOptions, ExecResult } from "./process.js";
 import { resolveTheme } from "./themes/index.js";
 
 // ---------------------------------------------------------------------------
@@ -121,7 +120,7 @@ export class RpcTransport {
 export async function bootstrapPlugin(plugin: Plugin): Promise<void> {
   let transport: RpcTransport;
 
-  const handler = async (command: string, args: unknown, id: string): Promise<unknown> => {
+  const handler = async (command: string, args: unknown): Promise<unknown> => {
     return handleCoreRequest(command, args, plugin, transport!);
   };
 
@@ -223,8 +222,13 @@ function buildContext(
     // // Deprecated — kept for backward compat, mirrors host.project
     // project: host.project ?? { cwd: "" },
 
-    async exec(command, options = {}) {
-      return send("exec", { command, options }) as ReturnType<ExecutionContext["exec"]>;
+    // async exec(command, options = {}) {
+    //   // return send("exec", { command, options }) as ReturnType<ExecutionContext["exec"]>;
+    //   return send("exec", { command, options }) as ReturnType<ExecutionContext["execStreamed"]>;
+    // },
+    
+    async exec(command: string, options: ExecOptions = {}): Promise<ExecResult> {
+      return send("exec", { command, options }) as Promise<ExecResult>;
     },
 
     async execStreamed(command, options) {
@@ -246,7 +250,7 @@ function buildContext(
       return result;
     },
 
-    async showToast(title, options = {}) {
+    async showToast(title: string, options: ToastOptions = {}): Promise<void> {
       await send("ui.showToast", { title, options });
     },
 

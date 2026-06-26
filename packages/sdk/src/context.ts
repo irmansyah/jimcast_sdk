@@ -242,11 +242,10 @@ export interface ExecutionContext {
   // -------------------------------------------------------------------------
 
   /**
-   * Runs a shell command in the current project's working directory and
-   * returns the result when it completes.
+   * Runs a shell command and returns the result when it completes.
    *
    * @param command - The shell command string, e.g. `"git status --short"`.
-   * @param options - Optional execution options (timeout, env vars, etc.).
+   * @param options - Optional execution options (timeout, env overrides, etc.).
    * @returns The command's stdout, stderr, and exit code.
    *
    * @example

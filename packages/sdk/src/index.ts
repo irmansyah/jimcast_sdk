@@ -92,10 +92,7 @@ export type {
   Widget,
   WidgetContent,
   WidgetDefinition,
-  WidgetRow,
-  WidgetBadge,
   WidgetSlot,
-  WidgetCard,
 } from "./widget.js";
 
 // Themes
