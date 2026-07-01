@@ -1,26 +1,49 @@
-/**
- * Theme helpers for plugin authors.
- *
- * These mirror the core `fs()` / `fv()` utilities so plugins can reference
- * the same CSS variables that the host injects via `applyTheme()`.
- *
- * Plugins never call `applyTheme()` directly — the host owns the :root.
- * These helpers are for constructing style values that reference host tokens.
- *
- * @example
- * ```typescript
- * import { fv, fs } from "@jimcast/sdk";
- *
- * // preferred — references the CSS var the host injected
- * el.style.fontSize = fv("md");          // "var(--fs-md)"
- * el.style.fontFamily = fv("family");    // "var(--font-family)"
- *
- * // escape hatch — resolves to a concrete px string
- * el.style.fontSize = fs(12);            // "17px"  (12 * SCALE, rounded)
- * ```
- */
+// ---------------------------------------------------------------------------
+// ThemeContext
+// ---------------------------------------------------------------------------
+export interface ThemeColors {
+  readonly bg: string;
+  readonly bg1: string;
+  readonly bg2: string;
+  readonly bg3: string;
+  readonly bg4: string;
+  readonly fg: string;
+  readonly fg2: string;
+  readonly fg3: string;
+  readonly fg4: string;
+  readonly red: string;
+  readonly brightRed: string;
+  readonly green: string;
+  readonly brightGreen: string;
+  readonly yellow: string;
+  readonly brightYellow: string;
+  readonly blue: string;
+  readonly brightBlue: string;
+  readonly purple: string;
+  readonly brightPurple: string;
+  readonly aqua: string;
+  readonly brightAqua: string;
+  readonly orange: string;
+  readonly brightOrange: string;
+}
 
-import type { ThemeTypography } from "./context.js";
+export interface ThemeTypography {
+  readonly family: string;
+  readonly xs: number;
+  readonly sm: number;
+  readonly md: number;
+  readonly lg: number;
+  readonly xl: number;
+}
+
+export interface ThemeSpacing {
+  readonly radiusSm: number;
+  readonly radiusMd: number;
+  readonly radiusLg: number;
+  readonly gapSm: number;
+  readonly gapMd: number;
+  readonly gapLg: number;
+}
 
 /** CSS var reference — preferred over `fs()` in most cases. */
 export const fv = (size: keyof ThemeTypography): string =>
@@ -29,9 +52,4 @@ export const fv = (size: keyof ThemeTypography): string =>
 /** CSS color var reference. */
 export const cv = (token: string): string => `var(--color-${token})`;
 
-/**
- * Resolves a raw number to a `"Npx"` string.
- * Use only when you need a concrete value (e.g. canvas, SVG attributes).
- * Prefer `fv()` for DOM style properties.
- */
 export const px = (n: number): string => `${n}px`;

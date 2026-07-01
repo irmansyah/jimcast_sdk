@@ -54,11 +54,13 @@ export interface WidgetAction {
   then?:             'refresh' | 'dismiss' | 'both'
 }
 
+export type WidgetActionFn = (ctx: ExecutionContext) => Promise<void>
+
 export interface WidgetItem {
   id:          string
   attribute?:  WidgetAttribute
   params?:     Record<string, string>
-  action?:     WidgetAction
+  action?:     WidgetAction | WidgetActionFn
 }
 
 export type WidgetContent =
@@ -82,21 +84,17 @@ export type WidgetContent =
  *
  * ```
  * ┌─────────────────┐
- * │   top           │
- * │─────────────────│
  * │   above-input   │
  * │─────────────────│
  * │   Search input  │
  * │─────────────────│
  * │   below-input   │
  * │─────────────────│
- * │   Results list  │
+ * │  Inside-Scroll  │
  * └─────────────────┘
  * ```
  */
-// export type WidgetSlot = "top" | "above-input" | "below-input" | "inside-scroll";
-export type WidgetSlot = 'above-input' | 'below-input' | 'inside-scroll'
-
+export type WidgetSlotName = 'above-input' | 'below-input' | 'inside-scroll'
 
 // ---------------------------------------------------------------------------
 // Widget definition
@@ -105,7 +103,7 @@ export type WidgetSlot = 'above-input' | 'below-input' | 'inside-scroll'
 export interface WidgetDefinition {
   readonly id: string;
 
-  readonly defaultSlot: WidgetSlot;
+  readonly defaultSlot: WidgetSlotName;
 
   render(context: ExecutionContext): Promise<WidgetContent>;
 }

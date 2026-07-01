@@ -1,11 +1,18 @@
-import type { ThemeContext } from "../context.js";
-import { defaultTheme }     from "./default.js";
+import { defaultTheme }      from "./default.js";
 import { gruvboxLightTheme } from "./gruvbox-light.js";
-import { catppuccinTheme }  from "./catppuccin.js";
-import { nordTheme }        from "./nord.js";
-import { tokyoNightTheme }  from "./tokyo-night.js";
+import { catppuccinTheme }   from "./catppuccin.js";
+import { nordTheme }         from "./nord.js";
+import { tokyoNightTheme }   from "./tokyo-night.js";
 
-export { defaultTheme, gruvboxLightTheme, catppuccinTheme, nordTheme, tokyoNightTheme };
+import type { ThemeContext } from "../context.js";
+
+export {
+  defaultTheme,
+  gruvboxLightTheme,
+  catppuccinTheme,
+  nordTheme,
+  tokyoNightTheme,
+};
 
 export type ThemeName =
   | "gruvbox-dark"

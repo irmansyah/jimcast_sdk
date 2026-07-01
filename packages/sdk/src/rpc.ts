@@ -19,21 +19,23 @@ import type {
 import { createStorage } from "./storage.js";
 import type { ExecOptions, ExecResult } from "./process.js";
 import { resolveTheme } from "./themes/index.js";
+import type { WidgetContent, WidgetItem, WidgetActionFn } from "./widget.js";
+import type { ThemeContext } from "./context.js";
 
 // ---------------------------------------------------------------------------
 // Protocol types
 // ---------------------------------------------------------------------------
 
 interface CoreRequest {
-  id: string;
+  id:      string;
   command: string;
-  args: unknown;
+  args:    unknown;
 }
 
 interface CoreResponse {
-  id: string;
+  id:      string;
   result?: unknown;
-  error?: string;
+  error?:  string;
 }
 
 // ---------------------------------------------------------------------------
@@ -41,10 +43,12 @@ interface CoreResponse {
 // ---------------------------------------------------------------------------
 
 type PendingResolve = (value: unknown) => void;
-type PendingReject  = (reason: Error) => void;
+type PendingReject  = (reason: Error)  => void;
+
+const PENDING_TIMEOUT_MS = 30_000;
 
 export class RpcTransport {
-  private readonly pending = new Map<string, [PendingResolve, PendingReject]>();
+  private readonly pending = new Map<string, [PendingResolve, PendingReject, ReturnType<typeof setTimeout>]>();
 
   constructor(
     private readonly stdin:     NodeJS.ReadableStream,
@@ -57,8 +61,13 @@ export class RpcTransport {
   /** Send a request to core and await the response. */
   send(command: string, args: unknown): Promise<unknown> {
     return new Promise((resolve, reject) => {
-      const id = crypto.randomUUID();
-      this.pending.set(id, [resolve, reject]);
+      const id      = crypto.randomUUID();
+      const timeout = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`RPC timeout: no response for command "${command}" (id=${id})`));
+      }, PENDING_TIMEOUT_MS);
+
+      this.pending.set(id, [resolve, reject, timeout]);
       this.write({ id, command, args });
     });
   }
@@ -101,8 +110,11 @@ export class RpcTransport {
         const res     = message as CoreResponse;
         const pending = this.pending.get(res.id);
         if (!pending) return;
+
+        const [resolve, reject, timeout] = pending;
+        clearTimeout(timeout);
         this.pending.delete(res.id);
-        const [resolve, reject] = pending;
+
         if (res.error) {
           reject(new Error(res.error));
         } else {
@@ -114,14 +126,51 @@ export class RpcTransport {
 }
 
 // ---------------------------------------------------------------------------
+// Widget action fn registry
+// ---------------------------------------------------------------------------
+
+interface RegisteredAction {
+  fn:  WidgetActionFn;
+  ctx: ExecutionContext;
+}
+
+const widgetActionRegistry = new Map<string, RegisteredAction>();
+
+function registerActionFn(fn: WidgetActionFn, ctx: ExecutionContext): string {
+  const fnId = `wfn_${crypto.randomUUID()}`;
+  widgetActionRegistry.set(fnId, { fn, ctx });
+  return fnId;
+}
+
+function serializeItem(item: WidgetItem, ctx: ExecutionContext): unknown {
+  if (typeof item.action === "function") {
+    const fnId = registerActionFn(item.action, ctx);
+    return { ...item, action: { _fnId: fnId } };
+  }
+  return item;
+}
+
+function serializeContent(content: WidgetContent, ctx: ExecutionContext): unknown {
+  if ("datas" in content) {
+    return {
+      ...content,
+      datas: (content.datas as readonly WidgetItem[]).map((item) =>
+        serializeItem(item, ctx),
+      ),
+    };
+  }
+  return content;
+}
+
+// ---------------------------------------------------------------------------
 // Bootstrap
 // ---------------------------------------------------------------------------
 
 export async function bootstrapPlugin(plugin: Plugin): Promise<void> {
   let transport: RpcTransport;
 
-  const handler = async (command: string, args: unknown): Promise<unknown> => {
-    return handleCoreRequest(command, args, plugin, transport!);
+  const handler = async (command: string, args: unknown, id: string): Promise<unknown> => {
+    return handleCoreRequest(command, args, id, plugin, transport);
   };
 
   transport = new RpcTransport(process.stdin, process.stdout, handler);
@@ -132,16 +181,19 @@ export async function bootstrapPlugin(plugin: Plugin): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function handleCoreRequest(
-  command: string,
-  args: unknown,
-  plugin: Plugin,
+  command:   string,
+  args:      unknown,
+  id:        string,
+  plugin:    Plugin,
   transport: RpcTransport,
 ): Promise<unknown> {
+
+  // ── executeCommand ────────────────────────────────────────────────────────
   if (command === "executeCommand") {
     const { commandId, envContext, hostContext: rawHost } = args as {
-      commandId: string;
-      envContext: EnvContext;
-      hostContext: { themeName?: string; project: { cwd: string } | null; providers?: Record<string, unknown> };
+      commandId:   string;
+      envContext:  EnvContext;
+      hostContext: RawHostContext;
     };
 
     const cmd = findCommand(plugin, commandId);
@@ -152,11 +204,12 @@ async function handleCoreRequest(
     return { items: result ?? [] };
   }
 
+  // ── renderWidget ──────────────────────────────────────────────────────────
   if (command === "renderWidget") {
     const { widgetId, envContext, hostContext: rawHost } = args as {
-      widgetId: string;
-      envContext: EnvContext;
-      hostContext: { themeName?: string; project: { cwd: string } | null; providers?: Record<string, unknown> };
+      widgetId:    string;
+      envContext:  EnvContext;
+      hostContext: RawHostContext;
     };
 
     const widget = plugin.widgets?.find((w) => w.id === widgetId);
@@ -164,7 +217,18 @@ async function handleCoreRequest(
 
     const context = buildContext(envContext, buildHostContext(rawHost), transport);
     const content = await widget.render(context);
-    return { content };
+
+    return { content: serializeContent(content, context) };
+  }
+
+  // ── invokeWidgetAction ────────────────────────────────────────────────────
+  if (command === "invokeWidgetAction") {
+    const { fnId } = args as { fnId: string };
+    const entry    = widgetActionRegistry.get(fnId);
+    if (!entry) throw new Error(`Unknown widget action fn: ${fnId}`);
+
+    await entry.fn(entry.ctx);
+    return {};
   }
 
   throw new Error(`Unknown command: ${command}`);
@@ -201,14 +265,13 @@ interface RawHostContext {
 function buildHostContext(raw: RawHostContext): HostContext {
   return {
     theme:     resolveTheme(raw.themeName),
-    // project:   raw.project ?? null,
     providers: raw.providers ?? {},
   };
 }
 
 function buildContext(
-  env:      EnvContext,
-  host:     HostContext,
+  env:       EnvContext,
+  host:      HostContext,
   transport: RpcTransport,
 ): ExecutionContext {
   const send    = (command: string, args: unknown) => transport.send(command, args);
@@ -219,14 +282,6 @@ function buildContext(
     host,
     storage,
 
-    // // Deprecated — kept for backward compat, mirrors host.project
-    // project: host.project ?? { cwd: "" },
-
-    // async exec(command, options = {}) {
-    //   // return send("exec", { command, options }) as ReturnType<ExecutionContext["exec"]>;
-    //   return send("exec", { command, options }) as ReturnType<ExecutionContext["execStreamed"]>;
-    // },
-    
     async exec(command: string, options: ExecOptions = {}): Promise<ExecResult> {
       return send("exec", { command, options }) as Promise<ExecResult>;
     },
@@ -251,19 +306,21 @@ function buildContext(
     },
 
     async showToast(title: string, options: ToastOptions = {}): Promise<void> {
-      await send("ui.showToast", { title, options });
+      await send("ui_show_toast", { title, options });
     },
 
     appendOutput(line) {
-      void send("ui.appendOutput", { line });
+      send("ui_append_output", { line }).catch((err: unknown) => {
+        console.error("[rpc] appendOutput failed:", err);
+      });
     },
 
     async copyToClipboard(text) {
-      await send("ui.copyToClipboard", { text });
+      await send("ui_copy_to_clipboard", { text });
     },
 
     async openUrl(url) {
-      await send("ui.openUrl", { url });
+      await send("ui_open_url", { url });
     },
   };
 }

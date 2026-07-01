@@ -9,25 +9,32 @@
  * - Using context.copyToClipboard
  * - createWidget for persistent UI slots
  */
-import { definePlugin, createWidget, type ExecutionContext, type WidgetContent } from "@jimcast/sdk";
+
+import { createWidget, definePlugin, type ExecutionContext, type WidgetContent } from "@jimcast/sdk";
 
 const branchWidget = createWidget({
   id: "hello-world.widget.branch-widget",
-  defaultSlot: "top",
+  defaultSlot: "below-input",
   async render(context: ExecutionContext): Promise<WidgetContent> {
     const { host } = context;
     return {
       type: "rows",
-      rows: [
+      datas: [
         {
-          label:      "cwd",
-          value:      "cwd_example",
-          valueColor: host.theme.colors.brightAqua,
+          id:      "cwd",
+          attribute: {
+            label1: "cwd",
+            labelRight: "cwd_example",
+            colorRight: host.theme.colors.brightAqua,
+          }
         },
         {
-          label:      "theme",
-          value:      host.theme.mode,
-          valueColor: host.theme.colors.brightYellow,
+          id:      "theme",
+          attribute: {
+            label1: "theme",
+            labelRight: host.theme.mode,
+            colorRight: host.theme.colors.brightYellow,
+          }
         },
       ],
     };

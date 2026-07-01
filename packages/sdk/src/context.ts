@@ -9,95 +9,20 @@
  * the context, which routes through the sandboxed JSON-RPC bridge.
  */
 
-import type { PluginStorage } from "./storage.js";
+import type { PluginStorage }                        from "./storage.js";
 import type { ExecOptions, ExecResult, ExecStreamOptions } from "./process.js";
-
-// ---------------------------------------------------------------------------
-// ProjectContext
-// ---------------------------------------------------------------------------
-
-/**
- * Snapshot of the current project state, provided by Jimcast core.
- *
- * This is computed once when the command fires — it will not change mid-execution.
- * If you need fresh data (e.g. after running a shell command), call `context.exec()`
- * and parse the output yourself.
- */
-// export interface ProjectContext {
-//   /**
-//    * Absolute path to the working directory Jimcast is currently focused on.
-//    * This is the directory your shell commands will run in.
-//    */
-//   readonly cwd: string;
-// }
+import type { ThemeColors, ThemeSpacing, ThemeTypography } from "./theme.js";
 
 // ---------------------------------------------------------------------------
 // ThemeContext
 // ---------------------------------------------------------------------------
-export interface ThemeColors {
-  readonly bg: string;
-  readonly bg1: string;
-  readonly bg2: string;
-  readonly bg3: string;
-  readonly bg4: string;
-  readonly fg: string;
-  readonly fg2: string;
-  readonly fg3: string;
-  readonly fg4: string;
-  readonly red: string;
-  readonly brightRed: string;
-  readonly green: string;
-  readonly brightGreen: string;
-  readonly yellow: string;
-  readonly brightYellow: string;
-  readonly blue: string;
-  readonly brightBlue: string;
-  readonly purple: string;
-  readonly brightPurple: string;
-  readonly aqua: string;
-  readonly brightAqua: string;
-  readonly orange: string;
-  readonly brightOrange: string;
-}
 
-export interface ThemeTypography {
-  readonly family: string;
-  readonly xs: number;
-  readonly sm: number;
-  readonly md: number;
-  readonly lg: number;
-  readonly xl: number;
-}
-
-export interface ThemeSpacing {
-  readonly radiusSm: number;
-  readonly radiusMd: number;
-  readonly radiusLg: number;
-  readonly gapSm: number;
-  readonly gapMd: number;
-  readonly gapLg: number;
-}
-
-/**
- * The host application's current visual theme.
- *
- * All values are resolved at command fire time — they reflect what the user
- * actually sees, including any overrides from their settings.
- *
- * Use these to style any UI your plugin renders instead of hardcoding values.
- *
- * @example
- * ```typescript
- * const { primary } = context.host.theme.colors;
- * const { mode } = context.host.theme;
- * ```
- */
 export interface ThemeContext {
   /** Current color mode. */
   readonly mode: "light" | "dark";
-  readonly colors: ThemeColors;
+  readonly colors:     ThemeColors;
   readonly typography: ThemeTypography;
-  readonly spacing: ThemeSpacing;
+  readonly spacing:    ThemeSpacing;
 }
 
 // ---------------------------------------------------------------------------
@@ -107,19 +32,9 @@ export interface ThemeContext {
 /**
  * Everything the Jimcast host exposes about itself to plugins.
  *
- * This is intentionally open-ended: Jimcast ships `theme` and `project` here,
- * and third-party host integrations (CI providers, issue trackers, etc.) can
- * extend it via the provider registry without touching the core SDK types.
- *
  * @example
  * ```typescript
- * // Theme
  * const { primary } = context.host.theme.colors;
- *
- * // Project
- * const { cwd } = context.host.project ?? {};
- *
- * // Custom provider (type-augmented via module declaration merging)
  * const issue = context.host.providers.linearIssueTracker?.currentIssue;
  * ```
  */
@@ -131,12 +46,6 @@ export interface HostContext {
   readonly theme: ThemeContext;
 
   /**
-   * Current project state, or `null` if Jimcast is running without
-   * an open project (e.g. in a global command palette).
-   */
-  // readonly project: ProjectContext | null;
-
-  /**
    * Escape hatch for host-registered providers.
    *
    * Providers are declared in `jimcast.config.ts` and type-augmented
@@ -144,7 +53,6 @@ export interface HostContext {
    *
    * @example
    * ```typescript
-   * // Augment in your plugin's type declarations:
    * declare module "@jimcast/sdk" {
    *   interface HostContext {
    *     providers: {
@@ -214,7 +122,8 @@ export interface ToastOptions {
 // ---------------------------------------------------------------------------
 
 /**
- * The full execution context passed to every command's `execute()` function.
+ * The full execution context passed to every command's `execute()` and
+ * widget's `render()` function.
  *
  * This is the complete API surface available to a plugin at runtime.
  * The TypeScript types here ARE the documentation — if it's not on this
@@ -224,18 +133,11 @@ export interface ExecutionContext {
   /** Information about the Jimcast runtime environment. */
   readonly env: EnvContext;
 
-  /**
-   * Generic host data: theme, project, and any registered providers.
-   */
+  /** Generic host data: theme and any registered providers. */
   readonly host: HostContext;
 
   /** Persistent key-value storage, scoped to this plugin. */
   readonly storage: PluginStorage;
-
-  /**
-   * @deprecated Use `context.host.project` instead. Will be removed in v2.
-   */
-  // readonly project: ProjectContext;
 
   // -------------------------------------------------------------------------
   // Shell execution
