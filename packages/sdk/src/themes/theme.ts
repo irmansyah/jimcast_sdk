@@ -45,6 +45,15 @@ export interface ThemeSpacing {
   readonly gapLg: number;
 }
 
+export interface ThemeContext {
+  /** Current color mode. */
+  mode: "light" | "dark";
+  colors: ThemeColors;
+  typography: ThemeTypography;
+  spacing: ThemeSpacing;
+}
+
+
 /** CSS var reference — preferred over `fs()` in most cases. */
 export const fv = (size: keyof ThemeTypography): string =>
   size === "family" ? "var(--font-family)" : `var(--fs-${size})`;

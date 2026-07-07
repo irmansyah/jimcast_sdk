@@ -14,7 +14,7 @@ import { createWidget, definePlugin, type ExecutionContext, type WidgetContent }
 
 const branchWidget = createWidget({
   id: "hello-world.widget.branch-widget",
-  defaultSlot: "below-input",
+  // defaultSlot: "below-input",
   async render(context: ExecutionContext): Promise<WidgetContent> {
     const { host } = context;
     return {

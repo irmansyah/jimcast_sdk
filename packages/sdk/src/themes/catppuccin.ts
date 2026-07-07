@@ -1,4 +1,4 @@
-import type { ThemeContext } from "../context.js";
+import type { ThemeContext } from "./theme.js";
 
 export const catppuccinTheme: ThemeContext = {
   mode: "dark",

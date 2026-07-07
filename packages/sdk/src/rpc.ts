@@ -20,7 +20,6 @@ import { createStorage } from "./storage.js";
 import type { ExecOptions, ExecResult } from "./process.js";
 import { resolveTheme } from "./themes/index.js";
 import type { WidgetContent, WidgetItem, WidgetActionFn } from "./widget.js";
-import type { ThemeContext } from "./context.js";
 
 // ---------------------------------------------------------------------------
 // Protocol types
@@ -134,28 +133,52 @@ interface RegisteredAction {
   ctx: ExecutionContext;
 }
 
+// Keyed by a stable `wfn_<widgetId>_<itemId>` id, NOT a fresh randomUUID per
+// render. Widgets with `repeat` re-render on a timer (e.g. every second) —
+// minting a new random id each time and never removing the old one meant
+// this map grew without bound for the life of the plugin process. Using a
+// stable key means a re-render simply overwrites the previous entry (which
+// also keeps `ctx` fresh, since re-render passes a new ExecutionContext).
 const widgetActionRegistry = new Map<string, RegisteredAction>();
 
-function registerActionFn(fn: WidgetActionFn, ctx: ExecutionContext): string {
-  const fnId = `wfn_${crypto.randomUUID()}`;
-  widgetActionRegistry.set(fnId, { fn, ctx });
-  return fnId;
+function actionFnId(widgetId: string, itemId: string): string {
+  return `wfn_${widgetId}_${itemId}`;
 }
 
-function serializeItem(item: WidgetItem, ctx: ExecutionContext): unknown {
+function registerActionFn(fnId: string, fn: WidgetActionFn, ctx: ExecutionContext): void {
+  widgetActionRegistry.set(fnId, { fn, ctx });
+}
+
+function serializeItem(widgetId: string, item: WidgetItem, ctx: ExecutionContext): unknown {
   if (typeof item.action === "function") {
-    const fnId = registerActionFn(item.action, ctx);
+    const fnId = actionFnId(widgetId, item.id);
+    registerActionFn(fnId, item.action, ctx);
     return { ...item, action: { _fnId: fnId } };
   }
   return item;
 }
 
-function serializeContent(content: WidgetContent, ctx: ExecutionContext): unknown {
+function serializeContent(widgetId: string, content: WidgetContent, ctx: ExecutionContext): unknown {
+  // `component` content carries a `render: () => ReactNode` function. This
+  // transport is newline-delimited JSON over stdin/stdout (see file header),
+  // and `JSON.stringify` silently drops function-valued properties — so
+  // letting this fall through to core would produce `{ type: "component" }`
+  // with no renderer and no error, i.e. a widget that just quietly fails to
+  // render. Fail loudly instead: `component` isn't representable over this
+  // RPC boundary and must be handled by an in-process host, not a plugin.
+  if (content.type === "component") {
+    throw new Error(
+      `Widget "${widgetId}" returned "component" content, which cannot be sent ` +
+      `over the plugin RPC transport (its render function is not JSON-serializable). ` +
+      `Use one of the other WidgetContent types instead.`,
+    );
+  }
+
   if ("datas" in content) {
     return {
       ...content,
       datas: (content.datas as readonly WidgetItem[]).map((item) =>
-        serializeItem(item, ctx),
+        serializeItem(widgetId, item, ctx),
       ),
     };
   }
@@ -183,7 +206,7 @@ export async function bootstrapPlugin(plugin: Plugin): Promise<void> {
 async function handleCoreRequest(
   command:   string,
   args:      unknown,
-  id:        string,
+  _id:       string,
   plugin:    Plugin,
   transport: RpcTransport,
 ): Promise<unknown> {
@@ -206,19 +229,35 @@ async function handleCoreRequest(
 
   // ── renderWidget ──────────────────────────────────────────────────────────
   if (command === "renderWidget") {
-    const { widgetId, envContext, hostContext: rawHost } = args as {
+    const { widgetId, envContext, hostContext: rawHost, query } = args as {
       widgetId:    string;
       envContext:  EnvContext;
       hostContext: RawHostContext;
+      query?:      string;
     };
 
     const widget = plugin.widgets?.find((w) => w.id === widgetId);
     if (!widget) throw new Error(`Unknown widget: ${widgetId}`);
 
     const context = buildContext(envContext, buildHostContext(rawHost), transport);
-    const content = await widget.render(context);
 
-    return { content: serializeContent(content, context) };
+    // A widget defines exactly one of `render` / `renderQuery` (see
+    // WidgetDescriptorRenderVariant in widget.ts) — both must be handled,
+    // not just `render`. renderQuery can also legitimately return `null`
+    // (e.g. "no match for this query"), which must pass through as-is
+    // rather than being force-fed into serializeContent.
+    let content: WidgetContent | null;
+    if (widget.render) {
+      content = await widget.render(context);
+    } else if (widget.renderQuery) {
+      content = await widget.renderQuery(context, query ?? "");
+    } else {
+      throw new Error(`Widget "${widgetId}" defines neither render nor renderQuery`);
+    }
+
+    if (content == null) return { content: null };
+
+    return { content: serializeContent(widgetId, content, context) };
   }
 
   // ── invokeWidgetAction ────────────────────────────────────────────────────

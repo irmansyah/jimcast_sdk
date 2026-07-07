@@ -3,8 +3,7 @@ import { gruvboxLightTheme } from "./gruvbox-light.js";
 import { catppuccinTheme }   from "./catppuccin.js";
 import { nordTheme }         from "./nord.js";
 import { tokyoNightTheme }   from "./tokyo-night.js";
-
-import type { ThemeContext } from "../context.js";
+import type { ThemeContext } from "./theme.js";
 
 export {
   defaultTheme,

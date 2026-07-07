@@ -23,7 +23,6 @@ export type {
 // Execution context
 export type {
   // ProjectContext,
-  ThemeContext,
   HostContext,
   EnvContext,
   ExecutionContext,
@@ -59,7 +58,7 @@ export type {
   WidgetContent,
   WidgetItem,
   WidgetActionFn,
-  WidgetDefinition,
+  WidgetDescriptorBase,
   WidgetSlotName,
 } from "./widget.js";
 
@@ -70,4 +69,5 @@ export type {
   ThemeColors,
   ThemeTypography,
   ThemeSpacing,
-} from "./theme.js";
+  ThemeContext,
+} from "./themes/theme.js";

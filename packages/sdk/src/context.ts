@@ -11,19 +11,19 @@
 
 import type { PluginStorage }                        from "./storage.js";
 import type { ExecOptions, ExecResult, ExecStreamOptions } from "./process.js";
-import type { ThemeColors, ThemeSpacing, ThemeTypography } from "./theme.js";
+import type { ThemeContext } from "./themes/theme.js";
 
 // ---------------------------------------------------------------------------
 // ThemeContext
 // ---------------------------------------------------------------------------
 
-export interface ThemeContext {
-  /** Current color mode. */
-  readonly mode: "light" | "dark";
-  readonly colors:     ThemeColors;
-  readonly typography: ThemeTypography;
-  readonly spacing:    ThemeSpacing;
-}
+// export interface ThemeContext {
+//   /** Current color mode. */
+//   readonly mode: "light" | "dark";
+//   readonly colors:     ThemeColors;
+//   readonly typography: ThemeTypography;
+//   readonly spacing:    ThemeSpacing;
+// }
 
 // ---------------------------------------------------------------------------
 // HostContext

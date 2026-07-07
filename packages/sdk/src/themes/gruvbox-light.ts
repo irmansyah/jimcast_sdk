@@ -1,4 +1,4 @@
-import type { ThemeContext } from "../index.js";
+import type { ThemeContext } from "./theme.js";
 
 export const gruvboxLightTheme: ThemeContext = {
   mode: "light",
