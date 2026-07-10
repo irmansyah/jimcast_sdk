@@ -1,4 +1,4 @@
-// [sdk] src/rpc.ts
+// [sdk] rpc.ts
 /**
  * @internal
  * Plugin ↔ Core IPC transport.

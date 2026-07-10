@@ -1,3 +1,5 @@
+// [sdk] command.ts
+
 /**
  * Types for defining commands and the plugin manifest.
  *

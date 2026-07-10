@@ -1,3 +1,5 @@
+// [sdk] index.ts
+
 // Command definition and plugin manifest
 export {
   definePlugin,

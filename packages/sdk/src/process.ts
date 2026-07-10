@@ -1,3 +1,5 @@
+// [sdk] process.ts
+
 /**
  * Shell process execution, available via {@link ExecutionContext.exec} and
  * {@link ExecutionContext.execStreamed}.
