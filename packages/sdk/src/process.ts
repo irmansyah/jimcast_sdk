@@ -40,6 +40,17 @@ export interface ExecOptions {
    * @default true
    */
   readonly captureStderr?: boolean;
+
+  /**
+   * `exec` always resolves with a full {@link ExecResult} regardless of the
+   * command's exit code — it never rejects just because the command failed
+   * (see {@link execSucceeded}/{@link execFailed} for checking that after
+   * the fact). This flag is forwarded to the runtime as-is; it does not
+   * change anything about the plugin-side `exec`/`execStreamed` wrappers
+   * themselves.
+   * @default false
+   */
+  readonly ignoreExitCode?: boolean;
 }
 
 /**

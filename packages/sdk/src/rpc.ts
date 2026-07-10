@@ -1,3 +1,4 @@
+// [sdk] src/rpc.ts
 /**
  * @internal
  * Plugin ↔ Core IPC transport.
@@ -19,7 +20,12 @@ import type {
 import { createStorage } from "./storage.js";
 import type { ExecOptions, ExecResult } from "./process.js";
 import { resolveTheme } from "./themes/index.js";
-import type { WidgetContent, WidgetItem, WidgetActionFn } from "./widget.js";
+import type {
+  AnyWidget,
+  WidgetContent,
+  WidgetItem,
+  WidgetActionFn,
+} from "./widget.js";
 
 // ---------------------------------------------------------------------------
 // Protocol types
@@ -158,22 +164,14 @@ function serializeItem(widgetId: string, item: WidgetItem, ctx: ExecutionContext
   return item;
 }
 
-function serializeContent(widgetId: string, content: WidgetContent, ctx: ExecutionContext): unknown {
-  // `component` content carries a `render: () => ReactNode` function. This
-  // transport is newline-delimited JSON over stdin/stdout (see file header),
-  // and `JSON.stringify` silently drops function-valued properties — so
-  // letting this fall through to core would produce `{ type: "component" }`
-  // with no renderer and no error, i.e. a widget that just quietly fails to
-  // render. Fail loudly instead: `component` isn't representable over this
-  // RPC boundary and must be handled by an in-process host, not a plugin.
-  if (content.type === "component") {
-    throw new Error(
-      `Widget "${widgetId}" returned "component" content, which cannot be sent ` +
-      `over the plugin RPC transport (its render function is not JSON-serializable). ` +
-      `Use one of the other WidgetContent types instead.`,
-    );
-  }
-
+function serializeContent(widgetId: string, content: WidgetContent<boolean>, ctx: ExecutionContext): unknown {
+  // Only `WidgetContent` variants ever pass through here — plugin content is
+  // sent to core as newline-delimited JSON over stdin/stdout (see file
+  // header), so nothing that can't survive `JSON.stringify` (e.g. a raw
+  // React node / render function) is representable in this type to begin
+  // with. Widgets needing that escape hatch are a core-only capability;
+  // see widget.ts's WidgetExpandableChild for why plugins only get
+  // 'widget' | 'custom', not 'component'.
   if ("datas" in content) {
     return {
       ...content,
@@ -197,6 +195,14 @@ export async function bootstrapPlugin(plugin: Plugin): Promise<void> {
   };
 
   transport = new RpcTransport(process.stdin, process.stdout, handler);
+}
+
+// ---------------------------------------------------------------------------
+// Widget lookup
+// ---------------------------------------------------------------------------
+
+function findWidget(plugin: Plugin, widgetId: string): AnyWidget | undefined {
+  return plugin.widgets?.find((w) => w.id === widgetId);
 }
 
 // ---------------------------------------------------------------------------
@@ -236,7 +242,7 @@ async function handleCoreRequest(
       query?:      string;
     };
 
-    const widget = plugin.widgets?.find((w) => w.id === widgetId);
+    const widget = findWidget(plugin, widgetId);
     if (!widget) throw new Error(`Unknown widget: ${widgetId}`);
 
     const context = buildContext(envContext, buildHostContext(rawHost), transport);
@@ -246,7 +252,7 @@ async function handleCoreRequest(
     // not just `render`. renderQuery can also legitimately return `null`
     // (e.g. "no match for this query"), which must pass through as-is
     // rather than being force-fed into serializeContent.
-    let content: WidgetContent | null;
+    let content: WidgetContent<boolean> | null;
     if (widget.render) {
       content = await widget.render(context);
     } else if (widget.renderQuery) {
@@ -268,6 +274,68 @@ async function handleCoreRequest(
 
     await entry.fn(entry.ctx);
     return {};
+  }
+
+  // ── resolveExpandableChild ────────────────────────────────────────────────
+  // Fires when an item's action is `{ then: 'expand' }`. The child list is
+  // static on the descriptor — `widget.expandable` is a discriminated union
+  // (`{ enable: true; childs: [...] } | { enable?: false }`), authored once
+  // at definition time alongside the widget itself, mirroring core's
+  // WidgetDescriptorExpandable. No need to re-render the host widget to
+  // obtain it; we just look the child up directly.
+  if (command === "resolveExpandableChild") {
+    const { widgetId, childId, envContext, hostContext: rawHost } = args as {
+      widgetId:    string;
+      childId:     string;
+      envContext:  EnvContext;
+      hostContext: RawHostContext;
+    };
+
+    const widget = findWidget(plugin, widgetId);
+    if (!widget) throw new Error(`Unknown widget: ${widgetId}`);
+    if (!widget.expandable?.enable) {
+      throw new Error(`Widget "${widgetId}" is not expandable`);
+    }
+
+    const child = widget.expandable.childs.find((c) => c.id === childId);
+    if (!child) {
+      throw new Error(`Unknown expandable child "${childId}" on widget "${widgetId}"`);
+    }
+
+    const context = buildContext(envContext, buildHostContext(rawHost), transport);
+
+    if (child.kind === "widget") {
+      // Only widgets registered on THIS plugin can be looked up here — the
+      // plugin process only has its own `plugin.widgets` array in scope.
+      // A widgetId belonging to a different plugin (e.g. another plugin's
+      // "<other-plugin>.some-widget") can never resolve through this path.
+      const target = findWidget(plugin, child.widgetId);
+      if (!target) {
+        throw new Error(
+          `Expandable child "${childId}" on widget "${widgetId}" references widgetId ` +
+          `"${child.widgetId}", which is not registered in this plugin's \`widgets\` ` +
+          `array. Cross-plugin widget references are not supported — point childs[].widgetId ` +
+          `at a widget defined in this same plugin.`,
+        );
+      }
+
+      let content: WidgetContent<boolean> | null;
+      if (target.render) {
+        content = await target.render(context);
+      } else if (target.renderQuery) {
+        content = await target.renderQuery(context, "");
+      } else {
+        throw new Error(`Widget "${child.widgetId}" defines neither render nor renderQuery`);
+      }
+
+      if (content == null) return { content: null };
+      return { content: serializeContent(target.id, content, context) };
+    }
+
+    // kind === "custom"
+    const content = await child.render();
+    if (content == null) return { content: null };
+    return { content: serializeContent(`${widgetId}.${childId}`, content, context) };
   }
 
   throw new Error(`Unknown command: ${command}`);

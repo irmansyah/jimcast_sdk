@@ -1,3 +1,5 @@
+// [sdk] widget.ts
+
 /**
  * Widget API — plugins that render persistent UI blocks in the command bar.
  *
@@ -12,13 +14,6 @@ import type { ExecutionContext } from "./context.js";
 // Color tokens
 // ---------------------------------------------------------------------------
 
-/**
- * Named color presets for widget elements.
- * These map to the host theme's Gruvbox palette.
- *
- * The `(string & {})` tail keeps autocomplete for named presets while
- * also accepting any raw hex value from `context.host.theme.colors`.
- */
 export type WidgetColor =
   | "default"
   | "green"
@@ -50,6 +45,8 @@ export interface WidgetAttribute {
   image?:      string
 }
 
+// `then: 'expand'` is only legal when E is true — i.e. when the owning
+// descriptor's `expandable.enable` is `true`. Mirrors core's ThenClause.
 export type ThenClause<E extends boolean = false> =
   | 'refresh'
   | 'dismiss'
@@ -73,38 +70,28 @@ export interface WidgetItem<E extends boolean = false> {
   action?:     WidgetAction<E> | WidgetActionFn
 }
 
+type WidgetDatasVariant<E extends boolean> =
+  | { readonly type: 'rows';    readonly datas: readonly WidgetItem<E>[]; }
+  | { readonly type: 'columns'; readonly datas: readonly WidgetItem<E>[]; }
+  | { readonly type: 'list';    readonly datas: readonly WidgetItem<E>[]; }
+  | { readonly type: 'badges';  readonly datas: readonly WidgetItem<E>[]; }
+  | { readonly type: 'grid-2';  readonly datas: readonly WidgetItem<E>[]; }
+  | { readonly type: 'grid-3';  readonly datas: readonly WidgetItem<E>[]; }
+
 export type WidgetContent<E extends boolean = false> =
-  | { readonly type: 'text';    readonly data:    string;                   }
-  | { readonly type: 'error';   readonly message: string;                   }
-  | { readonly type: 'divider'; readonly data?:   string;                   }
-  | { readonly type: 'rows';    readonly datas:   readonly WidgetItem<E>[]; }
-  | { readonly type: 'columns'; readonly datas:   readonly WidgetItem<E>[]; }
-  | { readonly type: 'list';    readonly datas:   readonly WidgetItem<E>[]; }
-  | { readonly type: 'badges';  readonly datas:   readonly WidgetItem<E>[]; }
-  | { readonly type: 'grid-2';  readonly datas:   readonly WidgetItem<E>[]; }
-  | { readonly type: 'grid-3';  readonly datas:   readonly WidgetItem<E>[]; }
-  | { readonly type: 'component'; render:  () => import('react').ReactNode; }
-
-// ---------------------------------------------------------------------------
-// Slot
-// ---------------------------------------------------------------------------
-
-/**
- * Where in the command bar the widget appears by default.
- * Users can override this in ~/.jimcast/config.json.
- *
- * ```
- * ┌─────────────────┐
- * │   above-input   │
- * │─────────────────│
- * │   Search input  │
- * │─────────────────│
- * │   below-input   │
- * │─────────────────│
- * │  Inside-Scroll  │
- * └─────────────────┘
- * ```
- */
+  | { readonly type: 'text';    readonly data:    string;  }
+  | { readonly type: 'error';   readonly message: string;  }
+  | { readonly type: 'divider'; readonly data?:   string;  }
+  // When a widget declares `expandable: { enable: true, ... }`, every
+  // datas-bearing content variant it returns must carry the live list of
+  // expandable children alongside `datas` — computed fresh in this same
+  // render call, so it can depend on whatever this call fetched. This is
+  // separate from (but kept in sync with) the descriptor's own static
+  // `expandable.childs`, which resolveExpandableChild in rpc.ts reads
+  // directly rather than re-rendering.
+  | (E extends true
+      ? WidgetDatasVariant<E> & { readonly expandable: readonly WidgetExpandableChild[] }
+      : WidgetDatasVariant<E>)
 
 // ---------------------------------------------------------------------------
 // Widget definition
@@ -113,7 +100,7 @@ export type WidgetContent<E extends boolean = false> =
 export interface WidgetExpandableChildWidget {
   id:       string   // matches an item.id in this descriptor's content
   kind:     'widget'
-  widgetId: string   // id of another registered widget to render
+  widgetId: string   // id of another widget in THIS plugin's `widgets` array
 }
 
 export interface WidgetExpandableChildCustom {
@@ -122,8 +109,18 @@ export interface WidgetExpandableChildCustom {
   render: () => WidgetContent | Promise<WidgetContent>
 }
 
+// NOTE: intentionally no 'component' kind here, unlike core's
+// WidgetExpandableChild. Plugin content is serialized to core over
+// newline-delimited JSON on stdout (see rpc.ts's serializeContent /
+// RpcTransport) — a `render: () => ReactNode` can't survive that trip.
+// Widgets needing a raw-React-node expandable child are a core-only
+// capability for now.
 export type WidgetExpandableChild = WidgetExpandableChildWidget | WidgetExpandableChildCustom
 
+// Discriminated union, matching core's WidgetDescriptorExpandable exactly:
+// declaring `enable: true` forces `childs` to be provided, and is the single
+// source of truth that unlocks `then: 'expand'` on this descriptor's own
+// action/items via ExpandEnabled below.
 export type WidgetDescriptorExpandable =
   | { enable: true; childs: WidgetExpandableChild[] }
   | { enable?: false; childs?: never }
@@ -143,14 +140,9 @@ export interface WidgetDescriptorBase<Exp extends WidgetDescriptorExpandable | u
   readonly repeat?:     WidgetDescriptorRepeat
   readonly expandable?: Exp;
   // NOTE: render/renderQuery intentionally live in WidgetDescriptorRenderVariant,
-  // not here. A `render(context): Promise<WidgetContent>` method on this base
-  // interface used to collide with the render variant's signature once
-  // intersected in WidgetDescriptor — nothing could satisfy both call
-  // signatures on the same `render` key. Keep this interface signature-free.
+  // not here — see WidgetDescriptorRenderVariant for why.
 }
 
-// `ctx` is threaded through both render forms so widgets can read
-// context.host.theme, context.storage, etc. at render time.
 type WidgetRenderFn<E extends boolean> =
   (ctx: ExecutionContext) => WidgetContent<E> | Promise<WidgetContent<E>>
 
@@ -164,16 +156,10 @@ type WidgetDescriptorRenderVariant<E extends boolean> =
 export type WidgetDescriptor<Exp extends WidgetDescriptorExpandable | undefined = undefined> =
   WidgetDescriptorBase<Exp> & WidgetDescriptorRenderVariant<ExpandEnabled<Exp>>
 
-// Widget is generic over Exp so createWidget's return type can track the
-// inferred Exp per call, instead of collapsing to the Exp=undefined default
-// (which is what caused the exactOptionalPropertyTypes mismatch on `action`).
-//
-// Defined as an intersection with WidgetDescriptor (not just WidgetDescriptorBase)
-// so that Widget actually carries `render`/`renderQuery` — interfaces can't
-// `extends` a union type like WidgetDescriptorRenderVariant, so this has to be
-// a type alias rather than an interface.
 export type Widget<Exp extends WidgetDescriptorExpandable | undefined = undefined> =
   WidgetDescriptor<Exp> & { readonly _type: "widget" };
+
+export type AnyWidget = Widget<WidgetDescriptorExpandable | undefined>;
 
 // ---------------------------------------------------------------------------
 // Factory
