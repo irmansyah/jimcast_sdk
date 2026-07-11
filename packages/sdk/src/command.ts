@@ -1,3 +1,5 @@
+// [sdk] command.ts
+
 /**
  * Types for defining commands and the plugin manifest.
  *
@@ -8,7 +10,7 @@
 
 import type { ExecutionContext } from "./context.js";
 import type { CommandItem } from "./ui.js";
-import type { Widget } from "./widget.js";
+import type { AnyWidget } from "./widget.js";
 
 // ---------------------------------------------------------------------------
 // Command result
@@ -117,10 +119,12 @@ export interface PluginDefinition {
   readonly commands: ReadonlyArray<Command | CommandGroup>;
 
   /**
-   * TODO
-   * add description
+   * The widgets this plugin contributes — persistent UI blocks rendered in
+   * the command bar (see widget.ts). Each renders into a slot the user
+   * configures in ~/.jimcast/config.json, optionally on a timer (`repeat`)
+   * and/or with expandable children (`expandable`).
    */
-  readonly widgets?: ReadonlyArray<Widget>;
+  readonly widgets?: ReadonlyArray<AnyWidget>;
 }
 
 /**

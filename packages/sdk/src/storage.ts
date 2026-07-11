@@ -1,3 +1,5 @@
+// [sdk] storage.ts
+
 /**
  * Plugin key-value storage.
  *
