@@ -46,7 +46,7 @@ export interface WidgetAttribute {
 }
 
 // `then: 'expand'` is only legal when E is true — i.e. when the owning
-// descriptor's `expandable.enable` is `true`. Mirrors core's ThenClause.
+// descriptor declared `expandable: true`.
 export type ThenClause<E extends boolean = false> =
   | 'refresh'
   | 'dismiss'
@@ -82,13 +82,14 @@ export type WidgetContent<E extends boolean = false> =
   | { readonly type: 'text';    readonly data:    string;  }
   | { readonly type: 'error';   readonly message: string;  }
   | { readonly type: 'divider'; readonly data?:   string;  }
-  // When a widget declares `expandable: { enable: true, ... }`, every
+  // When a widget declares `expandable: true` on its descriptor, every
   // datas-bearing content variant it returns must carry the live list of
   // expandable children alongside `datas` — computed fresh in this same
   // render call, so it can depend on whatever this call fetched. This is
-  // separate from (but kept in sync with) the descriptor's own static
-  // `expandable.childs`, which resolveExpandableChild in rpc.ts reads
-  // directly rather than re-rendering.
+  // the ONLY place the child list lives for plugin widgets — there is no
+  // separate static list on the descriptor to keep in sync with; rpc.ts's
+  // resolveExpandableChild re-renders the widget and reads this field
+  // directly rather than consulting anything static.
   | (E extends true
       ? WidgetDatasVariant<E> & { readonly expandable: readonly WidgetExpandableChild[] }
       : WidgetDatasVariant<E>)
@@ -117,16 +118,18 @@ export interface WidgetExpandableChildCustom {
 // capability for now.
 export type WidgetExpandableChild = WidgetExpandableChildWidget | WidgetExpandableChildCustom
 
-// Discriminated union, matching core's WidgetDescriptorExpandable exactly:
-// declaring `enable: true` forces `childs` to be provided, and is the single
-// source of truth that unlocks `then: 'expand'` on this descriptor's own
-// action/items via ExpandEnabled below.
-export type WidgetDescriptorExpandable =
-  | { enable: true; childs: WidgetExpandableChild[] }
-  | { enable?: false; childs?: never }
+// Just a boolean flag: unlike core's INTERNAL_WIDGET_REGISTRY entries (which
+// keep a static `expandable.childs` list alongside their content, per
+// widgetTypes.ts), plugin widgets have no other place to author a static
+// child list authors could keep in sync with content — the RPC boundary
+// means core can't reach into plugin closures anyway. `expandable: true`
+// exists purely to (a) gate `ExpandEnabled<Exp>` for typing render's return
+// value and `then: 'expand'`, and (b) let rpc.ts fail fast with a clear
+// "not expandable" error without needing to render first.
+export type WidgetDescriptorExpandable = boolean
 
 type ExpandEnabled<Exp extends WidgetDescriptorExpandable | undefined> =
-  Exp extends { enable: true } ? true : false
+  Exp extends true ? true : false
 
 interface WidgetDescriptorRepeat {
   enable?:  boolean

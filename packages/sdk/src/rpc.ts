@@ -1,4 +1,4 @@
-// [sdk] rpc.ts
+// [sdk] src/rpc.ts
 /**
  * @internal
  * Plugin ↔ Core IPC transport.
@@ -277,32 +277,44 @@ async function handleCoreRequest(
   }
 
   // ── resolveExpandableChild ────────────────────────────────────────────────
-  // Fires when an item's action is `{ then: 'expand' }`. The child list is
-  // static on the descriptor — `widget.expandable` is a discriminated union
-  // (`{ enable: true; childs: [...] } | { enable?: false }`), authored once
-  // at definition time alongside the widget itself, mirroring core's
-  // WidgetDescriptorExpandable. No need to re-render the host widget to
-  // obtain it; we just look the child up directly.
   if (command === "resolveExpandableChild") {
-    const { widgetId, childId, envContext, hostContext: rawHost } = args as {
-      widgetId:    string;
-      childId:     string;
-      envContext:  EnvContext;
-      hostContext: RawHostContext;
+    const { widgetId, childId, envContext, hostContext: rawHost, query } = args as {
+      widgetId:     string;
+      childId:      string;
+      envContext?:  EnvContext;
+      hostContext?: RawHostContext;
+      query?:       string;
     };
 
     const widget = findWidget(plugin, widgetId);
     if (!widget) throw new Error(`Unknown widget: ${widgetId}`);
-    if (!widget.expandable?.enable) {
+    if (!widget.expandable) {
       throw new Error(`Widget "${widgetId}" is not expandable`);
     }
 
-    const child = widget.expandable.childs.find((c) => c.id === childId);
+    const context = buildContext(
+      envContext ?? ({} as EnvContext),
+      buildHostContext(rawHost ?? {}),
+      transport,
+    );
+
+    let ownContent: WidgetContent<boolean> | null;
+    if (widget.render) {
+      ownContent = await widget.render(context);
+    } else if (widget.renderQuery) {
+      ownContent = await widget.renderQuery(context, query ?? "");
+    } else {
+      throw new Error(`Widget "${widgetId}" defines neither render nor renderQuery`);
+    }
+
+    if (ownContent == null || !("expandable" in ownContent)) {
+      throw new Error(`Widget "${widgetId}" did not return any expandable children`);
+    }
+
+    const child = ownContent.expandable.find((c) => c.id === childId);
     if (!child) {
       throw new Error(`Unknown expandable child "${childId}" on widget "${widgetId}"`);
     }
-
-    const context = buildContext(envContext, buildHostContext(rawHost), transport);
 
     if (child.kind === "widget") {
       // Only widgets registered on THIS plugin can be looked up here — the
@@ -368,8 +380,12 @@ interface RawHostContext {
  * Deserialises the raw `hostContext` payload sent by core into a typed
  * `HostContext`. Core sends only a theme name string — we resolve it to
  * the full ThemeContext here so plugins never deal with raw color maps.
+ *
+ * `raw` is optional to accommodate call sites (currently just
+ * resolveExpandableChild) whose core→plugin tunnel doesn't populate
+ * hostContext at all yet — see the comment above that handler.
  */
-function buildHostContext(raw: RawHostContext): HostContext {
+function buildHostContext(raw: Partial<RawHostContext>): HostContext {
   return {
     theme:     resolveTheme(raw.themeName),
     providers: raw.providers ?? {},
