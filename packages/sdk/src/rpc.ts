@@ -272,7 +272,7 @@ async function handleCoreRequest(
     const entry    = widgetActionRegistry.get(fnId);
     if (!entry) throw new Error(`Unknown widget action fn: ${fnId}`);
 
-    await entry.fn(entry.ctx);
+    await entry.fn();
     return {};
   }
 

@@ -29,7 +29,7 @@ export type WidgetColor =
 
 export type WidgetSlotName = 'above-input' | 'below-input' | 'inside-scroll'
 
-export type WidgetMode = 'default' | 'search' | 'apps' | 'ai' | 'shell'
+export type WidgetMode = 'default' | 'search'
 
 export interface WidgetAttribute {
   label1:      string
@@ -61,7 +61,7 @@ export interface WidgetAction<E extends boolean = false> {
   then?:             ThenClause<E>
 }
 
-export type WidgetActionFn = (ctx: ExecutionContext) => Promise<void>
+export type WidgetActionFn = () => Promise<void>
 
 export interface WidgetItem<E extends boolean = false> {
   id:          string
