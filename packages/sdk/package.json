@@ -17,6 +17,16 @@
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
       }
+    },
+    "./runtime": {
+      "import": {
+        "types": "./dist/runtime.d.mts",
+        "default": "./dist/runtime.mjs"
+      },
+      "require": {
+        "types": "./dist/runtime.d.cts",
+        "default": "./dist/runtime.cjs"
+      }
     }
   },
   "files": [
