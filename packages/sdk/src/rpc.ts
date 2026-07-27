@@ -263,7 +263,10 @@ async function handleCoreRequest(
 
     if (content == null) return { content: null };
 
-    return { content: serializeContent(widgetId, content, context) };
+    return {
+      content: serializeContent(widgetId, content, context),
+      showSection: widget.showSection,
+    };
   }
 
   // ── invokeWidgetAction ────────────────────────────────────────────────────

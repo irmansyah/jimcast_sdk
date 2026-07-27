@@ -1,4 +1,4 @@
-// [sdk] widget.ts
+// [sdk] src/widget.ts
 
 /**
  * Widget API — plugins that render persistent UI blocks in the command bar.
@@ -42,6 +42,11 @@ export interface WidgetAttribute {
   color3?:     string
   color4?:     string
   colorRight?: string
+  textSize1?:      number | string
+  textSize2?:      number | string
+  textSize3?:      number | string
+  textSize4?:      number | string
+  textSizeRight?:  number | string
   image?:      string
 }
 
@@ -70,6 +75,11 @@ export interface WidgetItem<E extends boolean = false> {
   action?:     WidgetAction<E> | WidgetActionFn
 }
 
+export interface TerminalLaunchSpec {
+  cmd:   string
+  args?: string[]
+}
+
 type WidgetDatasVariant<E extends boolean> =
   | { readonly type: 'rows';    readonly datas: readonly WidgetItem<E>[]; }
   | { readonly type: 'columns'; readonly datas: readonly WidgetItem<E>[]; }
@@ -79,7 +89,8 @@ type WidgetDatasVariant<E extends boolean> =
   | { readonly type: 'grid-3';  readonly datas: readonly WidgetItem<E>[]; }
 
 export type WidgetContent<E extends boolean = false> =
-  | { readonly type: 'text';    readonly data:    string;  }
+  | { readonly type: 'terminal'; readonly data:    TerminalLaunchSpec; }
+  | { readonly type: 'text';     readonly data:    WidgetItem<E>; }
   | { readonly type: 'error';   readonly message: string;  }
   | { readonly type: 'divider'; readonly data?:   string;  }
   // When a widget declares `expandable: true` on its descriptor, every
@@ -137,11 +148,12 @@ interface WidgetDescriptorRepeat {
 }
 
 export interface WidgetDescriptorBase<Exp extends WidgetDescriptorExpandable | undefined = undefined> {
-  readonly id:          string;
-  readonly showIn?:     WidgetMode[]
-  readonly action?:     WidgetAction<ExpandEnabled<Exp>>
-  readonly repeat?:     WidgetDescriptorRepeat
-  readonly expandable?: Exp;
+  readonly id:            string;
+  readonly showIn?:       WidgetMode[]
+  readonly action?:       WidgetAction<ExpandEnabled<Exp>>
+  readonly repeat?:       WidgetDescriptorRepeat
+  readonly showSection?:  boolean
+  readonly expandable?:   Exp;
   // NOTE: render/renderQuery intentionally live in WidgetDescriptorRenderVariant,
   // not here — see WidgetDescriptorRenderVariant for why.
 }
