@@ -1,14 +1,3 @@
-// [sdk] src/rpc.ts
-/**
- * @internal
- * Plugin ↔ Core IPC transport.
- *
- * Protocol: newline-delimited JSON over stdin/stdout
- * Request (core → plugin):  {"id": "uuid", "command": "...", "args": {...}}
- * Response (plugin → core): {"id": "uuid", "result": {...}}
- *                        or {"id": "uuid", "error": "message"}
- */
-
 import { createInterface } from "node:readline";
 import type { Plugin } from "./command.js";
 import type {

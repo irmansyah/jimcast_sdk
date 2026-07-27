@@ -198,3 +198,165 @@ export function createWidget<Exp extends WidgetDescriptorExpandable | undefined 
 ): Widget<Exp> {
   return { ...definition, _type: "widget" };
 }
+
+// ---------------------------------------------------------------------------
+// Tmux terminal helper
+// ---------------------------------------------------------------------------
+//
+// Core's built-in "Quick Tools" widget (see [core] widgetRegistry.ts) reads
+// a `quick_tools` config section shaped as WidgetExpandableConfig — a map of
+// id -> { label, kind: 'terminal' | 'component', ... } — and, for
+// `kind: 'terminal'` entries, spins up a shared tmux session/window and
+// hands back a `{ type: 'terminal' }` WidgetContent that attaches to it.
+//
+// Plugins can't reuse core's internal helpers directly (different module,
+// different registry), and plugin WidgetExpandableChild has no 'component'
+// kind (see the NOTE above), but the terminal half of that setup is plain
+// shell scripting with no core-only dependencies. This section reproduces
+// it for plugin authors so a plugin's own quick-tool-style terminals behave
+// identically to core's — same session, same attach/create-if-missing
+// semantics — and can be wired up as `kind: 'widget'` expandable children.
+
+/**
+ * Config shape for a single tmux-backed terminal tool, as read from a
+ * plugin's own config (e.g. a section of ~/.jimcast/config.json the plugin
+ * owns). Mirrors core's WidgetExpandableTerminalConfig field-for-field so
+ * plugin authors can reuse the same config shape users already know from
+ * the built-in Quick Tools.
+ */
+export interface WidgetExpandableTerminalConfig {
+  label:  string
+  kind:   'terminal'
+  window: string
+  cwd?:   string
+  cmd:    string
+}
+
+export type WidgetExpandableTerminalsConfig = Record<string, WidgetExpandableTerminalConfig>
+
+// Session name tmux windows get grouped under. This is the same session
+// core's own terminal-tmux widget attaches to, so plugin-created windows
+// show up alongside core's quick tools rather than in a separate session.
+// Namespace `window` values per-plugin (e.g. "myplugin:logs") to avoid
+// collisions with other plugins or with core's own window names.
+const TMUX_TOOL_SESSION = '[tool]'
+
+// Fallback cwd for the outer shell that hosts tmux itself. If the process
+// spawning this terminal inherited a cwd that no longer exists (deleted
+// directory, unmounted volume, etc.), `sh` fails at "shell-init" before it
+// ever reaches the tmux commands below — the per-window `-c "$cwd"` flags
+// never get a chance to run. `cd`-ing here first makes the script recover
+// on its own regardless of what cwd it was spawned with. Same fallback core
+// uses, kept identical on purpose.
+const TMUX_FALLBACK_CWD = '$HOME'
+
+/**
+ * Builds the shell script that attaches to (creating first if needed) a
+ * single tmux window inside the shared "[tool]" session. Plugin-side
+ * equivalent of core's buildTmuxAttachScript — same script shape, so
+ * windows created by a plugin are indistinguishable from core's own quick
+ * tools once attached.
+ */
+export function buildTmuxAttachScript(config: WidgetExpandableTerminalConfig): string {
+  const session = TMUX_TOOL_SESSION
+  const win     = config.window
+  const target  = `${session}:${win}`
+  const cwdFlag = config.cwd ? `-c "${config.cwd}"` : ''
+
+  return [
+    `cd "${TMUX_FALLBACK_CWD}" 2>/dev/null || cd /`,
+    `tmux has-session -t '${session}' 2>/dev/null || tmux new-session -d -s '${session}' ${cwdFlag} -n '${win}' 'set -g status off; ${config.cmd}'`,
+    `tmux list-windows -t '${session}' -F '#{window_name}' 2>/dev/null | grep -qx '${win}' || tmux new-window -t '${session}' -n '${win}' ${cwdFlag} '${config.cmd}'`,
+    `tmux select-window -t '${target}'`,
+    `exec tmux attach-session -t '${session}' -d`,
+  ].join(' && ')
+}
+
+/**
+ * Creates a widget that launches (or attaches to) a tmux-backed terminal
+ * for one WidgetExpandableTerminalConfig entry. Meant to be referenced as
+ * the target of a `kind: 'widget'` WidgetExpandableChild — the plugin
+ * equivalent of core's `jimcast-internal.terminal-tmux` widget.
+ *
+ * Unlike core's version, this is scoped to a single tool rather than taking
+ * a `{ tool }` render-time param — plugin widgets are looked up by static
+ * id (see WidgetExpandableChildWidget), so one widget id per tool is
+ * created up front instead.
+ *
+ * @example
+ * ```typescript
+ * const tools: WidgetExpandableTerminalsConfig = {
+ *   logs: { label: "Logs", kind: "terminal", window: "myplugin:logs", cmd: "tail -f app.log" },
+ * }
+ *
+ * const logsTerminal = createTmuxTerminalWidget("myplugin.logs-terminal", tools.logs)
+ *
+ * const myWidget = createWidget({
+ *   id: "myplugin.main",
+ *   expandable: true,
+ *   render(ctx) {
+ *     return {
+ *       type: "rows",
+ *       datas: [
+ *         { id: "logs", attribute: { label1: tools.logs.label }, action: { cmd: "true", then: "expand" } },
+ *       ],
+ *       expandable: [
+ *         { id: "logs", kind: "widget", widgetId: "myplugin.logs-terminal" },
+ *       ],
+ *     }
+ *   },
+ * })
+ *
+ * export const widgets = [myWidget, logsTerminal]
+ * ```
+ */
+export function createTmuxTerminalWidget(
+  id:     string,
+  config: WidgetExpandableTerminalConfig,
+): Widget {
+  return createWidget({
+    id,
+    render(_ctx): WidgetContent {
+      return {
+        type: 'terminal',
+        data: {
+          cmd:  'sh',
+          args: ['-c', buildTmuxAttachScript(config)],
+        },
+      }
+    },
+  })
+}
+
+/**
+ * Convenience for building one createTmuxTerminalWidget per entry of a
+ * WidgetExpandableTerminalsConfig in one call — handy when a plugin wants
+ * to expose several tmux tools (e.g. loaded from its own config file)
+ * without hand-writing a widget per entry. Non-terminal entries (if the
+ * config is shared with a shape that also allows other kinds) are skipped.
+ *
+ * Returned widgets are keyed by `${idPrefix}.${configKey}` — pass that same
+ * id as `widgetId` in the corresponding WidgetExpandableChildWidget.
+ *
+ * @example
+ * ```typescript
+ * const tools: WidgetExpandableTerminalsConfig = {
+ *   logs:  { label: "Logs",  kind: "terminal", window: "myplugin:logs",  cmd: "tail -f app.log" },
+ *   redis: { label: "Redis", kind: "terminal", window: "myplugin:redis", cmd: "redis-cli" },
+ * }
+ *
+ * const terminalWidgets = createTmuxTerminalWidgets("myplugin", tools)
+ * // -> { "myplugin.logs": Widget, "myplugin.redis": Widget }
+ * ```
+ */
+export function createTmuxTerminalWidgets(
+  idPrefix: string,
+  config:   WidgetExpandableTerminalsConfig,
+): Record<string, Widget> {
+  const out: Record<string, Widget> = {}
+  for (const [key, entry] of Object.entries(config)) {
+    if (entry.kind !== 'terminal') continue
+    out[`${idPrefix}.${key}`] = createTmuxTerminalWidget(`${idPrefix}.${key}`, entry)
+  }
+  return out
+}
