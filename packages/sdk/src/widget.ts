@@ -66,13 +66,22 @@ export interface WidgetAction<E extends boolean = false> {
   then?:             ThenClause<E>
 }
 
-export type WidgetActionFn = () => Promise<void>
+export type WidgetActionFn = (values?: Record<string, string>) => Promise<void>;
 
 export interface WidgetItem<E extends boolean = false> {
   id:          string
   attribute?:  WidgetAttribute
   params?:     Record<string, string>
   action?:     WidgetAction<E> | WidgetActionFn
+}
+
+export interface WidgetFormField {
+  id:           string
+  kind:         'text' | 'textarea' | 'select'
+  label?:       string
+  placeholder?: string
+  options?:     { label: string; value: string }[]
+  default?:     string
 }
 
 export interface TerminalLaunchSpec {
@@ -93,14 +102,11 @@ export type WidgetContent<E extends boolean = false> =
   | { readonly type: 'text';     readonly data:    WidgetItem<E>; }
   | { readonly type: 'error';   readonly message: string;  }
   | { readonly type: 'divider'; readonly data?:   string;  }
-  // When a widget declares `expandable: true` on its descriptor, every
-  // datas-bearing content variant it returns must carry the live list of
-  // expandable children alongside `datas` — computed fresh in this same
-  // render call, so it can depend on whatever this call fetched. This is
-  // the ONLY place the child list lives for plugin widgets — there is no
-  // separate static list on the descriptor to keep in sync with; rpc.ts's
-  // resolveExpandableChild re-renders the widget and reads this field
-  // directly rather than consulting anything static.
+  | { readonly type: 'form';
+      readonly fields:       readonly WidgetFormField[]
+      readonly submitLabel?: string
+      readonly action:       WidgetAction<E> | WidgetActionFn
+    }
   | (E extends true
       ? WidgetDatasVariant<E> & { readonly expandable: readonly WidgetExpandableChild[] }
       : WidgetDatasVariant<E>)

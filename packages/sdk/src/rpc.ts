@@ -1,3 +1,5 @@
+// [sdk] src/rpc.ts
+
 import { createInterface } from "node:readline";
 import type { Plugin } from "./command.js";
 import type {
@@ -222,7 +224,46 @@ async function handleCoreRequest(
     return { items: result ?? [] };
   }
 
-  // ── renderWidget ──────────────────────────────────────────────────────────
+  // ── renderExpandableChild ──────────────────────────────────────────────────
+  // Called by core for quick_tools entries configured as `kind: "external-custom"`
+  // (see [core] widgetRegistry.ts). Unlike resolveExpandableChild, there is no
+  // parent widget/childId pair here — the quick_tools config key IS the fully
+  // qualified widgetId, and core wants that widget rendered directly, the same
+  // way renderWidget does. Kept as a separate command (rather than reusing
+  // "renderWidget") because core reaches it via invoke_plugin_command, not
+  // render_widget — see the "external-component" vs "external-custom" split in
+  // widgetRegistry.ts's buildWidgetExpandablesExpandableChilds for why a plugin
+  // author would pick one over the other.
+  if (command === "renderExpandableChild") {
+    const { widgetId, envContext, hostContext: rawHost, query } = args as {
+      widgetId:     string;
+      envContext?:  EnvContext;
+      hostContext?: RawHostContext;
+      query?:       string;
+    };
+
+    const widget = findWidget(plugin, widgetId);
+    if (!widget) throw new Error(`Unknown widget: ${widgetId}`);
+
+    const context = buildContext(
+      envContext ?? ({} as EnvContext),
+      buildHostContext(rawHost ?? {}),
+      transport,
+    );
+
+    let content: WidgetContent<boolean> | null;
+    if (widget.render) {
+      content = await widget.render(context);
+    } else if (widget.renderQuery) {
+      content = await widget.renderQuery(context, query ?? "");
+    } else {
+      throw new Error(`Widget "${widgetId}" defines neither render nor renderQuery`);
+    }
+
+    if (content == null) return { content: null };
+    return { content: serializeContent(widgetId, content, context) };
+  }
+
   if (command === "renderWidget") {
     const { widgetId, envContext, hostContext: rawHost, query } = args as {
       widgetId:    string;
@@ -230,12 +271,12 @@ async function handleCoreRequest(
       hostContext: RawHostContext;
       query?:      string;
     };
-
+  
     const widget = findWidget(plugin, widgetId);
     if (!widget) throw new Error(`Unknown widget: ${widgetId}`);
-
+  
     const context = buildContext(envContext, buildHostContext(rawHost), transport);
-
+  
     // A widget defines exactly one of `render` / `renderQuery` (see
     // WidgetDescriptorRenderVariant in widget.ts) — both must be handled,
     // not just `render`. renderQuery can also legitimately return `null`
@@ -249,9 +290,9 @@ async function handleCoreRequest(
     } else {
       throw new Error(`Widget "${widgetId}" defines neither render nor renderQuery`);
     }
-
+  
     if (content == null) return { content: null };
-
+  
     return {
       content: serializeContent(widgetId, content, context),
       showSection: widget.showSection,
@@ -260,11 +301,10 @@ async function handleCoreRequest(
 
   // ── invokeWidgetAction ────────────────────────────────────────────────────
   if (command === "invokeWidgetAction") {
-    const { fnId } = args as { fnId: string };
-    const entry    = widgetActionRegistry.get(fnId);
+    const { fnId, values } = args as { fnId: string; values?: Record<string, string> };
+    const entry = widgetActionRegistry.get(fnId);
     if (!entry) throw new Error(`Unknown widget action fn: ${fnId}`);
-
-    await entry.fn();
+    await entry.fn(values);
     return {};
   }
 

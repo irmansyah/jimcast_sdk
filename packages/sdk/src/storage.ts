@@ -1,4 +1,4 @@
-// [sdk] storage.ts
+// [sdk] src/storage.ts
 
 /**
  * Plugin key-value storage.
@@ -43,7 +43,7 @@ export interface ListKeysOptions {
  * await context.storage.set("last-branch", context.project.branch ?? "main");
  *
  * // Retrieve it next time
- * const lastBranch = await context.storage.get("last-branch");
+ * const lastBranch = await context.storage_get("last-branch");
  *
  * // Store structured data
  * await context.storage.set("config", JSON.stringify({ showDrafts: true }));
@@ -125,30 +125,30 @@ export function createStorage(
 ): PluginStorage {
   return {
     async get(key: string): Promise<string | null> {
-      const result = await send("storage.get", { key });
+      const result = await send("storage_get", { key });
       return (result as { value: string | null }).value;
     },
 
     async set(key: string, value: string): Promise<void> {
-      await send("storage.set", { key, value });
+      await send("storage_set", { key, value });
     },
 
     async delete(key: string): Promise<void> {
-      await send("storage.delete", { key });
+      await send("storage_delete", { key });
     },
 
     async has(key: string): Promise<boolean> {
-      const result = await send("storage.has", { key });
+      const result = await send("storage_has", { key });
       return (result as { exists: boolean }).exists;
     },
 
     async keys(options?: ListKeysOptions): Promise<string[]> {
-      const result = await send("storage.keys", { prefix: options?.prefix ?? null });
+      const result = await send("storage_keys", { prefix: options?.prefix ?? null });
       return (result as { keys: string[] }).keys;
     },
 
     async clear(): Promise<void> {
-      await send("storage.clear", {});
+      await send("storage_clear", {});
     },
   };
 }

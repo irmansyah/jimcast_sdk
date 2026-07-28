@@ -42,7 +42,6 @@ export type {
   ListKeysOptions,
   PluginStorage,
 } from "./storage.js";
-// ✂️ REMOVED bootstrapPlugin FROM HERE TO PROTECT THE BROWSER
 // Widget
 export {
   createWidget,
