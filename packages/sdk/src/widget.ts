@@ -153,13 +153,31 @@ interface WidgetDescriptorRepeat {
   seconds?: number
 }
 
+// Per-widget options for how it participates in the section it renders
+// into. Mirrors core's `Section` shape (see [core] widgetTypes.ts) minus
+// `title` — plugin widgets don't set their title explicitly; core derives
+// it from the widget id when the plugin's render response doesn't include
+// one (see [core] plugins.rs's render_widget).
+export interface WidgetSectionOptions {
+  // Whether the (derived) section title is shown above this widget's
+  // content. Default: true.
+  titleShow?: boolean
+  // Whether this widget is a stop on the command bar's Tab/arrow-key
+  // cursor navigation. When false, the widget still renders but is
+  // skipped over when navigating. Default: true.
+  navigationActive?: boolean
+  // Whether this widget participates in query search filtering. When
+  // false, the widget is never hidden by the search query. Default: true.
+  querySearchActive?: boolean
+}
+
 export interface WidgetDescriptorBase<Exp extends WidgetDescriptorExpandable | undefined = undefined> {
-  readonly id:            string;
-  readonly showIn?:       WidgetMode[]
-  readonly action?:       WidgetAction<ExpandEnabled<Exp>>
-  readonly repeat?:       WidgetDescriptorRepeat
-  readonly showSection?:  boolean
-  readonly expandable?:   Exp;
+  readonly id:          string;
+  readonly showIn?:     WidgetMode[]
+  readonly action?:     WidgetAction<ExpandEnabled<Exp>>
+  readonly repeat?:     WidgetDescriptorRepeat
+  readonly section?:    WidgetSectionOptions
+  readonly expandable?: Exp;
   // NOTE: render/renderQuery intentionally live in WidgetDescriptorRenderVariant,
   // not here — see WidgetDescriptorRenderVariant for why.
 }

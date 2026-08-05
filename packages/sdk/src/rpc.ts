@@ -16,6 +16,7 @@ import type {
   WidgetContent,
   WidgetItem,
   WidgetActionFn,
+  WidgetSectionOptions,
 } from "./widget.js";
 
 // ---------------------------------------------------------------------------
@@ -174,6 +175,23 @@ function serializeContent(widgetId: string, content: WidgetContent<boolean>, ctx
   return content;
 }
 
+// Core's render_widget expects the wire's `section` object keyed in
+// snake_case (`title_show`, `query_navigation_active`,
+// `query_search_active` — see [core] plugins.rs), while WidgetSectionOptions
+// stays camelCase on the JS/SDK side for authoring ergonomics. Translate
+// here, at the RPC boundary, rather than asking plugin authors to know
+// core's wire casing. Fields the plugin didn't set are simply omitted
+// (JSON.stringify drops `undefined` values), so core's own defaulting
+// logic still applies for anything left unspecified.
+function serializeSection(section: WidgetSectionOptions | undefined): unknown {
+  if (!section) return undefined;
+  return {
+    title_show:          section.titleShow,
+    navigation_active:   section.navigationActive,
+    query_search_active: section.querySearchActive,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Bootstrap
 // ---------------------------------------------------------------------------
@@ -295,7 +313,7 @@ async function handleCoreRequest(
   
     return {
       content: serializeContent(widgetId, content, context),
-      showSection: widget.showSection,
+      section: serializeSection(widget.section),
     };
   }
 
