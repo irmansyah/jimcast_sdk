@@ -1,6 +1,6 @@
 import type { ThemeContext } from "./theme.js";
 
-export const defaultTheme: ThemeContext = {
+export const gruvboxDarkTheme: ThemeContext = {
   mode: "dark",
   colors: {
     bg:           "#1d2021",

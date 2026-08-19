@@ -176,7 +176,7 @@ function serializeContent(widgetId: string, content: WidgetContent<boolean>, ctx
 }
 
 // Core's render_widget expects the wire's `section` object keyed in
-// snake_case (`title_show`, `query_navigation_active`,
+// snake_case (`title_show`, `navigation_active`,
 // `query_search_active` — see [core] plugins.rs), while WidgetSectionOptions
 // stays camelCase on the JS/SDK side for authoring ergonomics. Translate
 // here, at the RPC boundary, rather than asking plugin authors to know

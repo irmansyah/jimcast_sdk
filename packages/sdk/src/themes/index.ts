@@ -1,4 +1,5 @@
 import { defaultTheme }      from "./default.js";
+import { gruvboxDarkTheme }      from "./gruvbox-dark.js";
 import { gruvboxLightTheme } from "./gruvbox-light.js";
 import { catppuccinTheme }   from "./catppuccin.js";
 import { nordTheme }         from "./nord.js";
@@ -7,6 +8,7 @@ import type { ThemeContext } from "./theme.js";
 
 export {
   defaultTheme,
+  gruvboxDarkTheme,
   gruvboxLightTheme,
   catppuccinTheme,
   nordTheme,
@@ -14,6 +16,7 @@ export {
 };
 
 export type ThemeName =
+  | "default"
   | "gruvbox-dark"
   | "gruvbox-light"
   | "catppuccin"
@@ -21,7 +24,8 @@ export type ThemeName =
   | "tokyo-night";
 
 const themes: Record<ThemeName, ThemeContext> = {
-  "gruvbox-dark":  defaultTheme,
+  "default":       defaultTheme,
+  "gruvbox-dark":  gruvboxDarkTheme,
   "gruvbox-light": gruvboxLightTheme,
   "catppuccin":    catppuccinTheme,
   "nord":          nordTheme,
