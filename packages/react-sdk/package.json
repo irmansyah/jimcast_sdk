@@ -16,7 +16,7 @@
       "require": "./dist/server.cjs"
     },
     "./react": {
-      "types": "./dist/react/useHostBridge.d.ts",
+      "types": "./dist/react/index.d.ts",
       "import": "./dist/react.mjs",
       "require": "./dist/react.cjs"
     },

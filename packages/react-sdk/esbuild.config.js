@@ -1,3 +1,5 @@
+// [sdk] packages/react-sdk/esbuild.config.js
+//
 // Builds each SDK entry point separately, in both ESM and CJS, so
 // consumers can `import` (Vite/webview bundles) or `require` (esbuild
 // -bundled Node backends, which most plugin backend.ts builds target)
@@ -13,7 +15,7 @@ const entries = [
   { name: 'protocol', entry: 'src/protocol.ts', platform: 'neutral' },
   { name: 'client', entry: 'src/client/index.ts', platform: 'browser' },
   { name: 'server', entry: 'src/server/index.ts', platform: 'node' },
-  { name: 'react', entry: 'src/react/useHostBridge.ts', platform: 'browser' },
+  { name: 'react', entry: 'src/react/index.ts', platform: 'browser' },
 ]
 
 for (const { name, entry, platform } of entries) {
