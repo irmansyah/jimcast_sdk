@@ -1,4 +1,5 @@
-// jimcast-react-sdk/src/server/hostRpc.ts internal — lets a plugin backend send
+// [sdk] packages/react-sdk/src/server/hostRpc.ts
+//
 // PLUGIN-INITIATED requests back to the host (e.g. storage_get,
 // ui_show_toast) — same envelope plugin_runtime.rs::handle_plugin_request
 // expects: a line with "id" + "command" + "args".

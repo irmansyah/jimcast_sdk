@@ -1,4 +1,4 @@
-// jimcast-react-sdk/src/react/useHostBridge.ts — thin, OPTIONAL React binding over jimcast-react-sdk/client.
+// [sdk] packages/react-sdk/src/react/useHostBridge.ts 
 // A separate entry point on purpose: importing 'jimcast-react-sdk/server' or
 // 'jimcast-react-sdk/client' alone never pulls React in. Only plugins that
 // explicitly `import ... from 'jimcast-react-sdk/react'` need react as a peer

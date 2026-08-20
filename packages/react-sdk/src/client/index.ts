@@ -1,4 +1,5 @@
-// jimcast-react-sdk/client/index.ts — for code running INSIDE a sandboxed plugin
+// [sdk] packages/react-sdk/src/client/index.ts 
+//
 // webview/iframe (served from jimcast-plugin://<plugin>/<entry>). Talks
 // to the host purely over postMessage. Zero Node imports — this file
 // must never import 'node:*' or anything that assumes a Node runtime.

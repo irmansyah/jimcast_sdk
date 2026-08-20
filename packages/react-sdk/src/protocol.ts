@@ -1,4 +1,5 @@
-// jimcast-react-sdk/protocol — shared wire-format types for BOTH transports
+// [sdk] packages/react-sdk/src/protocol.ts
+//
 // (webview<->host over postMessage, backend<->host over stdio NDJSON).
 // Mirrors domain::plugin::protocol.rs on the Rust side field-for-field —
 // keep these in sync manually if that file changes; there's no
