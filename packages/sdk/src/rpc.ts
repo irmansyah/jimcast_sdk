@@ -1,4 +1,4 @@
-// [sdk] src/rpc.ts
+// [sdk] packages/sdk/src/rpc.ts
 
 import { createInterface } from "node:readline";
 import type { Plugin } from "./command.js";
@@ -18,22 +18,23 @@ import type {
   WidgetActionFn,
   WidgetSectionOptions,
 } from "./widget.js";
+import {
+  isRequest,
+  isResponse,
+  type IpcRequest,
+  type IpcResponse,
+} from "@jimcast/protocol";
 
 // ---------------------------------------------------------------------------
 // Protocol types
 // ---------------------------------------------------------------------------
 
-interface CoreRequest {
-  id:      string;
-  command: string;
-  args:    unknown;
-}
-
-interface CoreResponse {
-  id:      string;
-  result?: unknown;
-  error?:  string;
-}
+// CoreRequest/CoreResponse used to be defined locally here — they were
+// structurally identical to @jimcast/protocol's IpcRequest/IpcResponse
+// (which also serve the webview<->host transport in @jimcast/react-sdk).
+// Now imported from there so there's exactly one JS-side copy of this wire
+// shape to keep in sync with domain::plugin::protocol.rs, instead of two
+// independently-drifting ones.
 
 // ---------------------------------------------------------------------------
 // Transport
@@ -65,16 +66,16 @@ export class RpcTransport {
       }, PENDING_TIMEOUT_MS);
 
       this.pending.set(id, [resolve, reject, timeout]);
-      this.write({ id, command, args });
+      this.write({ id, command, args } satisfies IpcRequest);
     });
   }
 
   respond(id: string, result: unknown): void {
-    this.write({ id, result });
+    this.write({ id, result } satisfies IpcResponse);
   }
 
   respondError(id: string, message: string): void {
-    this.write({ id, error: message });
+    this.write({ id, error: message } satisfies IpcResponse);
   }
 
   private write(message: unknown): void {
@@ -87,15 +88,15 @@ export class RpcTransport {
     rl.on("line", (line) => {
       if (!line.trim()) return;
 
-      let message: CoreRequest | CoreResponse;
+      let message: unknown;
       try {
-        message = JSON.parse(line) as CoreRequest | CoreResponse;
+        message = JSON.parse(line);
       } catch {
         return;
       }
 
-      if ("command" in message) {
-        const req = message as CoreRequest;
+      if (isRequest(message)) {
+        const req = message as IpcRequest;
         this.onRequest(req.command, req.args, req.id).then(
           (result) => this.respond(req.id, result),
           (err: unknown) => {
@@ -103,8 +104,8 @@ export class RpcTransport {
             this.respondError(req.id, msg);
           },
         );
-      } else {
-        const res     = message as CoreResponse;
+      } else if (isResponse(message)) {
+        const res     = message as IpcResponse;
         const pending = this.pending.get(res.id);
         if (!pending) return;
 

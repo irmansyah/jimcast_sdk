@@ -1,0 +1,49 @@
+{
+  "name": "@jimcast/react-sdk",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "Client/server SDK for building jimcast-core external plugins — webview<->host and backend<->host transports, without pulling React or Node into whichever side doesn't need it.",
+  "exports": {
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client.mjs",
+      "require": "./dist/client.cjs"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server.mjs",
+      "require": "./dist/server.cjs"
+    },
+    "./react": {
+      "types": "./dist/react/useHostBridge.d.ts",
+      "import": "./dist/react.mjs",
+      "require": "./dist/react.cjs"
+    },
+    "./protocol": {
+      "types": "./dist/protocol.d.ts",
+      "import": "./dist/protocol.mjs",
+      "require": "./dist/protocol.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node esbuild.config.js && tsc -p tsconfig.json --emitDeclarationOnly --outDir dist"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.2.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.4.0"
+  }
+}
