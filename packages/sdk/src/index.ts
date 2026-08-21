@@ -1,4 +1,4 @@
-// [sdk] src/index.ts
+// [sdk] packages/sdk/src/index.ts
 
 // Command definition and plugin manifest
 export {

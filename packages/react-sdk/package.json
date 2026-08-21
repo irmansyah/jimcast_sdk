@@ -32,6 +32,9 @@
   "scripts": {
     "build": "node esbuild.config.js && tsc -p tsconfig.json --emitDeclarationOnly --outDir dist"
   },
+  "dependencies": {
+    "@jimcast/protocol": "file:../protocol"
+  },
   "peerDependencies": {
     "react": ">=18"
   },

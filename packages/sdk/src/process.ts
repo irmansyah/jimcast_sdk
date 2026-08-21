@@ -1,4 +1,4 @@
-// [sdk] src/process.ts
+// [sdk] package/sdk/src/process.ts
 
 /**
  * Shell process execution, available via {@link ExecutionContext.exec} and

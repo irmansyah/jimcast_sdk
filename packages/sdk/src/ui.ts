@@ -1,4 +1,4 @@
-// [sdk] src/ui.ts
+// [sdk] packages/sdk/src/ui.ts
 
 /**
  * UI primitives that a plugin can render into the Jimcast command bar.

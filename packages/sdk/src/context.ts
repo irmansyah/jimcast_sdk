@@ -1,4 +1,4 @@
-// [sdk] src/context.ts
+// [sdk] packages/sdk/src/context.ts
 
 /**
  * Context objects passed to command `execute()` functions.

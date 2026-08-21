@@ -9,24 +9,27 @@
 // respectively deliberately — "server" never touches `window`, "client"
 // and "react" never touch `node:readline`. Bundling them together would
 // make each half needlessly pull in an unused runtime.
+//
+// @jimcast/protocol is external across ALL entries (not just 'browser')
+// since it's a real dependency now (storage/theme sharing with @jimcast/sdk)
+// and consumers already get it resolved via node_modules the same way
+// 'react' is — bundling its source in here would defeat the point of
+// having one shared implementation instead of a copy per package.
 import { build } from 'esbuild'
-
 const entries = [
   { name: 'protocol', entry: 'src/protocol.ts', platform: 'neutral' },
   { name: 'client', entry: 'src/client/index.ts', platform: 'browser' },
   { name: 'server', entry: 'src/server/index.ts', platform: 'node' },
   { name: 'react', entry: 'src/react/index.ts', platform: 'browser' },
 ]
-
 for (const { name, entry, platform } of entries) {
   const shared = {
     entryPoints: [entry],
     bundle: true,
     platform,
-    external: platform === 'browser' ? ['react'] : [],
+    external: platform === 'browser' ? ['react', '@jimcast/protocol'] : ['@jimcast/protocol'],
   }
   await build({ ...shared, format: 'esm', outfile: `dist/${name}.mjs` })
   await build({ ...shared, format: 'cjs', outfile: `dist/${name}.cjs` })
 }
-
 console.log('jimcast-react-sdk: built client/server/react/protocol in esm+cjs')

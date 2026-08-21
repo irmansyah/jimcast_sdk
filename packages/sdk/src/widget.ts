@@ -1,4 +1,4 @@
-// [sdk] src/widget.ts
+// [sdk] packages/sdk/src/widget.ts
 
 /**
  * Widget API — plugins that render persistent UI blocks in the command bar.

@@ -1,11 +1,9 @@
-import { defaultTheme }      from "./default.js";
-import { gruvboxDarkTheme }      from "./gruvbox-dark.js";
-import { gruvboxLightTheme } from "./gruvbox-light.js";
-import { catppuccinTheme }   from "./catppuccin.js";
-import { nordTheme }         from "./nord.js";
-import { tokyoNightTheme }   from "./tokyo-night.js";
-import type { ThemeContext } from "./theme.js";
-
+// [sdk] packages/sdk/src/themes/index.ts
+// Moved to @jimcast/protocol so @jimcast/react-sdk can share the same
+// theme definitions instead of growing an independent copy — see
+// packages/protocol/src/themes/index.ts for the actual implementation.
+// Re-exported here so rpc.ts's `./themes/index.js` import (and any plugin
+// author importing @jimcast/sdk's theme exports) keeps working unchanged.
 export {
   defaultTheme,
   gruvboxDarkTheme,
@@ -13,31 +11,6 @@ export {
   catppuccinTheme,
   nordTheme,
   tokyoNightTheme,
-};
-
-export type ThemeName =
-  | "default"
-  | "gruvbox-dark"
-  | "gruvbox-light"
-  | "catppuccin"
-  | "nord"
-  | "tokyo-night";
-
-const themes: Record<ThemeName, ThemeContext> = {
-  "default":       defaultTheme,
-  "gruvbox-dark":  gruvboxDarkTheme,
-  "gruvbox-light": gruvboxLightTheme,
-  "catppuccin":    catppuccinTheme,
-  "nord":          nordTheme,
-  "tokyo-night":   tokyoNightTheme,
-};
-
-export function resolveTheme(name: string | undefined): ThemeContext {
-  if (name && name in themes) {
-    return themes[name as ThemeName];
-  }
-  if (name) {
-    console.warn(`[jimcast-sdk] unknown theme "${name}", falling back to gruvbox-dark`);
-  }
-  return defaultTheme;
-}
+  resolveTheme,
+  type ThemeName,
+} from '@jimcast/protocol'
