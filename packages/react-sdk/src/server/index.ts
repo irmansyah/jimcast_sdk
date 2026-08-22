@@ -20,6 +20,7 @@ import { resolvePending } from './hostRpc'
 import { LIST_COMMANDS_ID, toCommandMeta, type CommandDefinition } from './commands'
 export { callHost } from './hostRpc'
 export { defineCommand, LIST_COMMANDS_ID } from './commands'
+export { getHostStorage } from './storage.js'
 export type { CommandDefinition, CommandArgSpec, CommandMeta } from './commands'
 
 export type Handler = (args: Record<string, any>) => unknown | Promise<unknown>

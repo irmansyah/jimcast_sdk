@@ -176,6 +176,7 @@ export function reportDragStarted(paths: string[], rect: IframeLocalRect): void 
     '*',
   )
 }
+export { useHostStorage } from './storage.js'
 
 // Start listening as soon as this module loads inside the iframe, rather
 // than waiting for a plugin to call callHost()/onHostNav() first — escape
