@@ -1,3 +1,5 @@
+// [sdk] packages/protocol/src/themes/default.ts 
+
 import type { ThemeContext } from "./theme.js";
 
 export const defaultTheme: ThemeContext = {

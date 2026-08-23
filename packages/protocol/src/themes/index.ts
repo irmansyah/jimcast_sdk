@@ -43,3 +43,5 @@ export function resolveTheme(name: string | undefined): ThemeContext {
   }
   return defaultTheme;
 }
+
+export type { ThemeContext, ThemeColors, ThemeTypography, ThemeSpacing } from "./theme.js";

@@ -35,4 +35,4 @@ export function isRequest(msg: any): msg is IpcRequest {
 }
 
 export * from './storage.js'
-export * from './themes/index.js'
+export { resolveTheme, defaultTheme, type ThemeContext } from './themes/index.js'

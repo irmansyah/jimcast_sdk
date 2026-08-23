@@ -128,12 +128,7 @@ function ensureListening() {
     })
   }
 
-  // Re-measure trigger for layout-only changes (font/image load, CSS
-  // transitions) that don't touch the DOM tree.
   new ResizeObserver(reportHeight).observe(document.body)
-
-  // Re-measure trigger for actual DOM/content changes — the common case
-  // for a React app re-rendering with more or less content.
   new MutationObserver(reportHeight).observe(document.documentElement, {
     childList: true, subtree: true, attributes: true, characterData: true,
   })
@@ -142,11 +137,6 @@ function ensureListening() {
   window.addEventListener('load', reportHeight)
 }
 
-/**
- * Calls a command implemented on the host side (ultimately a Rust
- * invoke_plugin_command). The host already knows which plugin this
- * iframe belongs to from the src it loaded, so no plugin name is passed.
- */
 export function callHost<T = unknown>(command: string, args: Record<string, unknown> = {}): Promise<T> {
   const id = `c${++seq}`
   return new Promise<T>((resolve, reject) => {
@@ -155,13 +145,11 @@ export function callHost<T = unknown>(command: string, args: Record<string, unkn
   })
 }
 
-/** Subscribe to host-driven keyboard nav. Returns an unsubscribe fn. */
 export function onHostNav(handler: (payload: NavPayload) => void): () => void {
   navListeners.add(handler)
   return () => navListeners.delete(handler)
 }
 
-/** Fire-and-forget: report the currently focused/hovered item + its rect. */
 export function reportFocusedItem(info: FocusedItemInfo | null): void {
   window.parent.postMessage(
     { source: 'jimcast-plugin', type: 'event', event: 'focusedItemChange', payload: info },
@@ -169,17 +157,14 @@ export function reportFocusedItem(info: FocusedItemInfo | null): void {
   )
 }
 
-/** Fire-and-forget: report that a native drag has started. */
 export function reportDragStarted(paths: string[], rect: IframeLocalRect): void {
   window.parent.postMessage(
     { source: 'jimcast-plugin', type: 'event', event: 'dragStarted', payload: { paths, rect } },
     '*',
   )
 }
-export { useHostStorage } from './storage.js'
 
-// Start listening as soon as this module loads inside the iframe, rather
-// than waiting for a plugin to call callHost()/onHostNav() first — escape
-// forwarding and height reporting need to work even for plugins that
-// never touch those APIs.
+export { useHostStorage } from './storage.js'
+export { useTheme } from './theme.js'   // ← new
+
 ensureListening()
