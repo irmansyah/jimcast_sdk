@@ -164,6 +164,13 @@ export function reportDragStarted(paths: string[], rect: IframeLocalRect): void 
   )
 }
 
+export function reportEscapePressed(): void {
+  window.parent.postMessage(
+    { source: 'jimcast-plugin', type: 'event', event: 'escape' },
+    '*',
+  )
+}
+
 export { useHostStorage } from './storage.js'
 export { useTheme } from './theme.js'   // ← new
 
