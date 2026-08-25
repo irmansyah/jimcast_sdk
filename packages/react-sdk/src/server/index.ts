@@ -95,10 +95,31 @@ export function defineWebviewBackend(
     if (resolvePending(msg)) return
     // Otherwise: the host is asking US to run a command.
     if (!msg.command) return
-    const handler = dispatch[msg.command]
-    if (!handler) return respondErr(msg.id, `unknown command: ${msg.command}`)
+
+    let command = msg.command
+    let args = msg.args ?? {}
+
+    if (!dispatch[command]) {
+      // Unknown command: if this plugin opted in to a "run" catch-all
+      // (registered its own `run` command/handler), retry once as a
+      // free-text dispatch through it, folding the original command back
+      // into the text so `run`'s own parsing sees the full line. This is
+      // pure dispatch-fallback plumbing — it doesn't know or care what
+      // "run" does for any given plugin, only whether one exists. Plugins
+      // that don't register `run` fall straight through to the original
+      // "unknown command" error, unchanged.
+      if (dispatch['run']) {
+        const rest = typeof args.text === 'string' ? args.text : ''
+        command = 'run'
+        args = { text: `${msg.command} ${rest}`.trim() }
+      } else {
+        return respondErr(msg.id, `unknown command: ${msg.command}`)
+      }
+    }
+
+    const handler = dispatch[command]
     try {
-      respond(msg.id, await handler(msg.args ?? {}))
+      respond(msg.id, await handler(args))
     } catch (e) {
       respondErr(msg.id, e instanceof Error ? e.message : String(e))
     }
