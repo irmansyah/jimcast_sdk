@@ -79,10 +79,33 @@ function ensureListening() {
     }
   })
 
-  // Escape forwarding — see file header.
+  // Escape forwarding — see file header. This listener is registered here
+  // at module load, i.e. before any plugin app code has mounted and
+  // attached its own keydown handlers — so for a single Escape keydown,
+  // this one's callback always RUNS first (bubble-phase listeners on the
+  // same target fire in registration order). That ordering makes a naive
+  // synchronous `if (e.defaultPrevented) return` here useless: at the
+  // moment this callback runs, no later-registered local handler (e.g. a
+  // plugin's own `window.addEventListener('keydown', ...)` added via
+  // useEffect, which handles Escape locally — canceling a delete
+  // confirmation, closing an internal modal, etc. — and calls
+  // e.preventDefault() to say so) has executed yet, so defaultPrevented
+  // would always read false here regardless.
+  //
+  // queueMicrotask defers the actual check to after the current task
+  // finishes — which is after every other synchronous listener for this
+  // same keydown event has already run and had its chance to call
+  // preventDefault(), no matter what order they were registered in. Only
+  // once nothing local claimed the Escape does this forward it, matching
+  // what this file's own header already claimed ("ONLY once it has
+  // confirmed there's nothing local left to close") but didn't actually
+  // implement before.
   window.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key !== 'Escape') return
-    window.parent.postMessage({ source: 'jimcast-plugin', type: 'event', event: 'escape' }, '*')
+    queueMicrotask(() => {
+      if (e.defaultPrevented) return
+      window.parent.postMessage({ source: 'jimcast-plugin', type: 'event', event: 'escape' }, '*')
+    })
   })
 
   // Arrow-key forwarding — only steals arrows from default scroll
@@ -164,6 +187,11 @@ export function reportDragStarted(paths: string[], rect: IframeLocalRect): void 
   )
 }
 
+/** Manual escape-forwarding for plugins that want to report "nothing left
+ *  to close locally" explicitly rather than relying on the automatic
+ *  keydown-based forwarding above (e.g. from a non-keydown code path).
+ *  NOTE: unlike the automatic forwarding, this does not check
+ *  e.defaultPrevented — it's an explicit, unconditional signal. */
 export function reportEscapePressed(): void {
   window.parent.postMessage(
     { source: 'jimcast-plugin', type: 'event', event: 'escape' },
