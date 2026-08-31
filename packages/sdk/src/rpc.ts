@@ -24,6 +24,7 @@ import {
   type IpcRequest,
   type IpcResponse,
 } from "@jimcast/protocol";
+import type { SearchResultItem, Document } from "@jimcast/protocol";
 
 // ---------------------------------------------------------------------------
 // Protocol types
@@ -44,6 +45,7 @@ type PendingResolve = (value: unknown) => void;
 type PendingReject  = (reason: Error)  => void;
 
 const PENDING_TIMEOUT_MS = 30_000;
+const SEARCH_RESULT_CAP = 5;
 
 export class RpcTransport {
   private readonly pending = new Map<string, [PendingResolve, PendingReject, ReturnType<typeof setTimeout>]>();
@@ -57,7 +59,7 @@ export class RpcTransport {
   }
 
   /** Send a request to core and await the response. */
-  send(command: string, args: unknown): Promise<unknown> {
+  send(command: string, args: Record<string, unknown>): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const id      = crypto.randomUUID();
       const timeout = setTimeout(() => {
@@ -226,6 +228,35 @@ async function handleCoreRequest(
   plugin:    Plugin,
   transport: RpcTransport,
 ): Promise<unknown> {
+
+  // ── search ──────────────────────────────────────────────────────────────
+  if (command === "search") {
+    const { query, envContext, hostContext: rawHost } = args as {
+      query:       string;
+      envContext:  EnvContext;
+      hostContext: RawHostContext;
+    };
+
+    if (!plugin.search) return { items: [] };
+
+    const context = buildContext(envContext, buildHostContext(rawHost), transport);
+    const items: SearchResultItem[] = await plugin.search(query, context);
+    return { items: items.slice(0, SEARCH_RESULT_CAP) };
+  }
+
+  // ── corpus ──────────────────────────────────────────────────────────────
+  if (command === "corpus") {
+    const { envContext, hostContext: rawHost } = args as {
+      envContext:  EnvContext;
+      hostContext: RawHostContext;
+    };
+
+    if (!plugin.corpus) return { documents: [] };
+
+    const context = buildContext(envContext, buildHostContext(rawHost), transport);
+    const documents: Document[] = await plugin.corpus(context);
+    return { documents };
+  }
 
   // ── executeCommand ────────────────────────────────────────────────────────
   if (command === "executeCommand") {

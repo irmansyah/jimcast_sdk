@@ -14,6 +14,20 @@ export type {
   Plugin,
   PluginDefinition,
 } from "./command.js";
+export {
+  scoreFields,
+  attributeFields,
+  documentFields,
+  FIELD_WEIGHT,
+} from "@jimcast/protocol";
+export type {
+  SearchField,
+  AttributeLike,
+  SearchResultItem,
+  SearchResultAction,
+  Document,
+  DocumentAction,
+} from "@jimcast/protocol";
 // UI primitives
 export type {
   Action,

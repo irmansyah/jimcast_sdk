@@ -1,52 +1,20 @@
 // [sdk] packages/react-sdk/src/server/index.ts
 //
-// execs (via package.json's "main"). This is the runtime any plugin
-// backend needs, React-driven or not — the same dispatcher works whether
-// there's a webview attached to this plugin at all.
-//
-// Owns the single stdin reader for the whole process. Every parsed line
-// is first offered to hostRpc's resolvePending() (in case it's a reply to
-// a callHost() call we made); only if that returns false is it dispatched
-// as an inbound host->plugin request. This is what removes the need for
-// every plugin to hand-write this disambiguation itself.
-//
-// `commands` (added alongside the original flat `handlers` map) is sugar
-// over the same dispatch map — see ./commands.ts. Passing commands here
-// (rather than a separate entry point) is deliberate: there can only be
-// one stdin reader, so anything that dispatches on incoming lines has to
-// go through this single map.
 import * as readline from 'node:readline'
 import { resolvePending } from './hostRpc'
-import { LIST_COMMANDS_ID, toCommandMeta, type CommandDefinition } from './commands'
+import { LIST_COMMANDS_ID, SEARCH_ID, CORPUS_ID, toCommandMeta, type CommandDefinition } from './commands'
 export { callHost } from './hostRpc'
-export { defineCommand, LIST_COMMANDS_ID } from './commands'
+export { defineCommand, defineSearch, defineCorpus, LIST_COMMANDS_ID, SEARCH_ID, CORPUS_ID } from './commands'
 export { getHostStorage } from './storage.js'
 export type { CommandDefinition, CommandArgSpec, CommandMeta } from './commands'
 
 export type Handler = (args: Record<string, any>) => unknown | Promise<unknown>
-// Renamed from PluginDefinition — @jimcast/sdk's command.ts already owns
-// that name for the full plugin manifest shape ({ name, commands, widgets? }).
-// This is a different, narrower thing: a flat command-dispatch map for the
-// lightweight webview-backend runtime. Keeping both named PluginDefinition
-// meant importing from both packages in the same file forced an alias.
 export interface WebviewBackendDefinition {
   [command: string]: Handler
 }
 
 let started = false
 
-/**
- * Registers this process as a jimcast-core plugin backend and starts
- * reading stdin. Call once, at module top level or in your entry file —
- * calling it more than once is a no-op after the first call (guards
- * against double-registration if backend.ts is accidentally imported
- * twice by a bundler).
- *
- * `commands` is optional sugar: each CommandDefinition is folded into the
- * dispatch map under its `id` (must not collide with a key already in
- * `handlers`), and — only if the list is non-empty — LIST_COMMANDS_ID is
- * auto-registered so the host can discover them without a manifest field.
- */
 export function defineWebviewBackend(
   handlers: WebviewBackendDefinition,
   commands: CommandDefinition[] = [],
