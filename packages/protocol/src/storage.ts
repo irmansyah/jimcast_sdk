@@ -120,8 +120,9 @@ export interface PluginStorage {
  * This is called by the runtime when setting up the execution context —
  * plugin authors never construct this directly.
  */
+
 export function createStorage(
-  send: (method: string, params: unknown) => Promise<unknown>
+  send: (method: string, params: Record<string, unknown>) => Promise<unknown>
 ): PluginStorage {
   return {
     async get(key: string): Promise<string | null> {

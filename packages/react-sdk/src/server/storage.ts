@@ -9,7 +9,7 @@ import { callHost } from './hostRpc.js'
 
 let instance: PluginStorage | null = null
 
-export function getHostStorage(): PluginStorage {
+export function useHostStorage(): PluginStorage {
   if (!instance) {
     instance = createStorage((method, params) => callHost(method, params as Record<string, unknown>))
   }

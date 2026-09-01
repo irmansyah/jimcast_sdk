@@ -23,8 +23,9 @@ import {
   isResponse,
   type IpcRequest,
   type IpcResponse,
+  type SearchResultItem,
+  type CorpusDocument,
 } from "@jimcast/protocol";
-import type { SearchResultItem, Document } from "@jimcast/protocol";
 
 // ---------------------------------------------------------------------------
 // Protocol types
@@ -479,7 +480,7 @@ function buildContext(
   host:      HostContext,
   transport: RpcTransport,
 ): ExecutionContext {
-  const send    = (command: string, args: unknown) => transport.send(command, args);
+  const send    = (command: string, args: Record<string, unknown>) => transport.send(command, args);
   const storage = createStorage(send);
 
   return {
