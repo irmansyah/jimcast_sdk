@@ -45,7 +45,7 @@
   "dependencies": {
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "@jimcast/protocol": "workspace:*"
+    "@jimcast/protocol": "file:../protocol"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",

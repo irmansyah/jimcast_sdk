@@ -71,6 +71,8 @@ export type {
   WidgetAction,
   WidgetActionFn,
   WidgetAttribute,
+  WidgetItemStyle,
+  WidgetGroupSection,
   WidgetColor,
   WidgetMode,
   ThenClause,

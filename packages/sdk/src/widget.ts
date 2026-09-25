@@ -50,6 +50,26 @@ export interface WidgetAttribute {
   image?:      string
 }
 
+/**
+ * Container-level visual styling for a WidgetItem (or a WidgetGroupSection,
+ * see below) — border/background/shape of the item itself, as opposed to
+ * WidgetAttribute which only carries the text content inside it. Mirrors
+ * core's WidgetItemStyle field-for-field (see [core] domain/widget/types.ts)
+ * so plugin-authored items render identically to internal-descriptor items.
+ *
+ * Every field is optional and additive: core falls back to its own default
+ * look (selection highlight, hover state, etc.) for anything left unset.
+ * Passes through the RPC boundary as plain JSON — no rpc.ts change needed,
+ * see serializeItem's `{ ...item }` spread.
+ */
+export interface WidgetItemStyle {
+  background?:   string        // hex, css color string, or a preset key core resolves (e.g. "green")
+  borderColor?:  string        // same resolution as background
+  borderWidth?:  number | string
+  borderRadius?: number | string
+  padding?:      number | string
+}
+
 // `then: 'expand'` is only legal when E is true — i.e. when the owning
 // descriptor declared `expandable: true`.
 export type ThenClause<E extends boolean = false> =
@@ -73,6 +93,12 @@ export interface WidgetItem<E extends boolean = false> {
   attribute?:  WidgetAttribute
   params?:     Record<string, string>
   action?:     WidgetAction<E> | WidgetActionFn
+  /**
+   * Optional container styling (border, background, radius, padding) for
+   * this item. See WidgetItemStyle. Applied by core's renderer last, so it
+   * overrides the default/selection treatment when set.
+   */
+  style?:      WidgetItemStyle
 }
 
 export interface WidgetFormField {
@@ -97,6 +123,30 @@ type WidgetDatasVariant<E extends boolean> =
   | { readonly type: 'grid-2';  readonly datas: readonly WidgetItem<E>[]; }
   | { readonly type: 'grid-3';  readonly datas: readonly WidgetItem<E>[]; }
 
+/**
+ * One slice of a composed 'group' widget. `content` is any WidgetContent
+ * variant — including another 'group', for nesting. Mirrors core's
+ * WidgetGroupSection (see [core] domain/widget/types.ts) so a plugin can
+ * build multi-primitive UIs (e.g. a file manager combining a 'columns'
+ * breadcrumb, a 'list' of files, and a 'grid-2' of quick actions) in a
+ * single widget response instead of being limited to one primitive per
+ * widget.
+ *
+ * IMPORTANT for plugin authors: any `item.action` function inside a
+ * section's content IS supported and will be wired up correctly — rpc.ts's
+ * serializeContent recurses into `sections[].content` specifically so
+ * function actions inside a group get registered the same way as a
+ * top-level widget's. Plain WidgetContent variants without a dedicated
+ * 'group'/'datas' case would silently lose function actions to
+ * JSON.stringify; group sections are exempted from that pitfall.
+ */
+export interface WidgetGroupSection<E extends boolean = false> {
+  id:       string
+  content:  WidgetContent<E>
+  style?:   WidgetItemStyle
+  section?: Pick<WidgetSectionOptions, 'titleShow'> & { title?: string }
+}
+
 export type WidgetContent<E extends boolean = false> =
   | { readonly type: 'terminal'; readonly data:    TerminalLaunchSpec; }
   | { readonly type: 'text';     readonly data:    WidgetItem<E>; }
@@ -107,6 +157,12 @@ export type WidgetContent<E extends boolean = false> =
       readonly submitLabel?: string
       readonly action:       WidgetAction<E> | WidgetActionFn
     }
+  /**
+   * Composite container combining multiple content primitives in one
+   * widget. See WidgetGroupSection above. Rendered on core's side by
+   * WidgetGroupSections in WidgetSlotShared.tsx.
+   */
+  | { readonly type: 'group'; readonly sections: readonly WidgetGroupSection<E>[] }
   | (E extends true
       ? WidgetDatasVariant<E> & { readonly expandable: readonly WidgetExpandableChild[] }
       : WidgetDatasVariant<E>)

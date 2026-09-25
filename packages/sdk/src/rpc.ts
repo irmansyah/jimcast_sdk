@@ -141,6 +141,14 @@ interface RegisteredAction {
 // this map grew without bound for the life of the plugin process. Using a
 // stable key means a re-render simply overwrites the previous entry (which
 // also keeps `ctx` fresh, since re-render passes a new ExecutionContext).
+//
+// `widgetId` here is really a "scope" string, not always a literal widget
+// id — for items inside a 'group' section it's `${widgetId}:${sectionId}`
+// (see serializeContent's 'group' case below), so that two different
+// sections reusing the same item id (e.g. both having a "delete" row)
+// don't collide in this registry. It's still stable across repeat
+// re-renders since the scope string is deterministic given the same
+// widgetId/section id, which is all that "stable key" behavior needs.
 const widgetActionRegistry = new Map<string, RegisteredAction>();
 
 function actionFnId(widgetId: string, itemId: string): string {
@@ -157,6 +165,9 @@ function serializeItem(widgetId: string, item: WidgetItem, ctx: ExecutionContext
     registerActionFn(fnId, item.action, ctx);
     return { ...item, action: { _fnId: fnId } };
   }
+  // `style` (see widget.ts's WidgetItemStyle) needs no special handling
+  // here — it's plain JSON-safe data, so it rides along in this spread
+  // exactly like `attribute`/`params` already do.
   return item;
 }
 
@@ -176,6 +187,31 @@ function serializeContent(widgetId: string, content: WidgetContent<boolean>, ctx
       ),
     };
   }
+
+  // 'group' content has no top-level `datas` — its items live nested
+  // inside each section's own content — so without this case it would
+  // fall through to the plain `return content` below and every function
+  // `action` inside every section would be silently dropped by
+  // JSON.stringify (functions serialize to nothing) instead of being
+  // swapped for a `{ _fnId }` reference the way a top-level widget's
+  // items are. Recursing here is what makes function actions work
+  // identically whether an item sits directly on a widget or inside one
+  // of its group's sections.
+  //
+  // Each section is serialized under its own scope
+  // (`${widgetId}:${section.id}`) rather than the shared `widgetId`, so
+  // two sections that happen to reuse the same item id don't collide in
+  // widgetActionRegistry — see the comment on that map above.
+  if (content.type === "group") {
+    return {
+      ...content,
+      sections: content.sections.map((section) => ({
+        ...section,
+        content: serializeContent(`${widgetId}:${section.id}`, section.content, ctx),
+      })),
+    };
+  }
+
   return content;
 }
 

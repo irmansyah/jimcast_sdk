@@ -58,7 +58,7 @@ importers:
   packages/sdk:
     dependencies:
       '@jimcast/protocol':
-        specifier: workspace:*
+        specifier: file:../protocol
         version: link:../protocol
       react:
         specifier: ^19.2.6
@@ -87,7 +87,7 @@ importers:
     dependencies:
       '@jimcast/sdk':
         specifier: file:/Users/mane/works/_startup/jimcast/jimcast-sdk/packages/sdk
-        version: file:packages/sdk
+        version: link:../../packages/sdk
     devDependencies:
       '@types/node':
         specifier: ^25.9.3
@@ -489,10 +489,6 @@ packages:
   '@jest/schemas@29.6.3':
     resolution: {integrity: sha512-mo5j5X+jIZmJQveBKeS/clAueipV7KgiX1vMgCxam1RNYiqE1w62n0/tJJnHtjW8ZHcQco5gY85jA3mi0L+nSA==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
-
-  '@jimcast/sdk@file:packages/sdk':
-    resolution: {directory: packages/sdk, type: directory}
-    engines: {node: '>=18.0.0'}
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -2050,12 +2046,6 @@ snapshots:
   '@jest/schemas@29.6.3':
     dependencies:
       '@sinclair/typebox': 0.27.10
-
-  '@jimcast/sdk@file:packages/sdk':
-    dependencies:
-      '@jimcast/protocol': link:packages/protocol
-      react: 19.2.7
-      react-dom: 19.2.7(react@19.2.7)
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:

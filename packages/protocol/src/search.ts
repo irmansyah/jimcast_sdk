@@ -88,6 +88,7 @@ export interface SearchResultItem {
   subtitle?: string
   score: number
   action: SearchResultAction
+  pluginId?: string
 }
 
 // ---------------------------------------------------------------------------

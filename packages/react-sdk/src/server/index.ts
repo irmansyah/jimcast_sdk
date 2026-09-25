@@ -1,12 +1,12 @@
 // [sdk] packages/react-sdk/src/server/index.ts
-//
+
 import * as readline from 'node:readline'
 import { resolvePending } from './hostRpc'
 import { LIST_COMMANDS_ID, SEARCH_ID, CORPUS_ID, toCommandMeta, type CommandDefinition } from './commands'
 export { callHost } from './hostRpc'
 export { defineCommand, defineSearch, defineCorpus, LIST_COMMANDS_ID, SEARCH_ID, CORPUS_ID } from './commands'
-export { getHostStorage } from './storage.js'
 export type { CommandDefinition, CommandArgSpec, CommandMeta } from './commands'
+export { useHostStorage } from './storage.js'
 
 export type Handler = (args: Record<string, any>) => unknown | Promise<unknown>
 export interface WebviewBackendDefinition {
@@ -54,28 +54,15 @@ export function defineWebviewBackend(
     try {
       msg = JSON.parse(line)
     } catch {
-      // Malformed line — matches the host's tolerance for "sent non-JSON"
-      // (plugin_runtime.rs logs and continues rather than crashing).
       return
     }
-    // First: is this a reply to something WE asked the host? If so,
-    // hostRpc's pending map handles it and we're done with this line.
     if (resolvePending(msg)) return
-    // Otherwise: the host is asking US to run a command.
     if (!msg.command) return
 
     let command = msg.command
     let args = msg.args ?? {}
 
     if (!dispatch[command]) {
-      // Unknown command: if this plugin opted in to a "run" catch-all
-      // (registered its own `run` command/handler), retry once as a
-      // free-text dispatch through it, folding the original command back
-      // into the text so `run`'s own parsing sees the full line. This is
-      // pure dispatch-fallback plumbing — it doesn't know or care what
-      // "run" does for any given plugin, only whether one exists. Plugins
-      // that don't register `run` fall straight through to the original
-      // "unknown command" error, unchanged.
       if (dispatch['run']) {
         const rest = typeof args.text === 'string' ? args.text : ''
         command = 'run'

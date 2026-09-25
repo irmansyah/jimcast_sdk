@@ -108,3 +108,6 @@ storybook-static/
 
 # Optional: for Jest
 .jest-cache/
+ 
+
+**generated_jimcast-sdk*
