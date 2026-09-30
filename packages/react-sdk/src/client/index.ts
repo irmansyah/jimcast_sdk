@@ -20,29 +20,48 @@ export interface FocusedItemInfo {
 
 type PendingCall = { resolve: (v: unknown) => void; reject: (e: unknown) => void }
 
-const pending = new Map<string, PendingCall>()
-const navListeners = new Set<(p: NavPayload) => void>()
+// Module state lives on globalThis, NOT in module-level variables.
+//
+// esbuild.config.js bundles src/client/* into BOTH client.mjs and react.mjs
+// (useHostBridge -> ../client, createApp -> ../client/theme|storage), so a plugin
+// that imports from both '@jimcast/react-sdk/client' and '/react' loads this file
+// twice. With per-copy state, callHost ids ("c1", "c2", ...) collide across the
+// copies — one host reply would resolve a pending call in BOTH — and the
+// Escape / arrow-key / contentHeight window listeners would be registered twice.
+// Sharing one state object makes any number of copies behave as one.
+interface ClientState {
+  pending: Map<string, PendingCall>
+  navListeners: Set<(p: NavPayload) => void>
+  seq: number
+  listening: boolean
+}
+const g = globalThis as { __jimcastClient?: ClientState }
+const S: ClientState = (g.__jimcastClient ??= {
+  pending: new Map(),
+  navListeners: new Set(),
+  seq: 0,
+  listening: false,
+})
+
 const ARROW_KEYS = new Set<string>(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])
-let seq = 0
-let listening = false
 
 function ensureListening() {
-  if (listening) return
-  listening = true
+  if (S.listening) return
+  S.listening = true
 
   window.addEventListener('message', (e: MessageEvent) => {
     const data = e.data
     if (!data || typeof data !== 'object' || data.source !== 'jimcast-host') return
     if (data.type === 'result') {
-      const p = pending.get(data.id)
+      const p = S.pending.get(data.id)
       if (!p) return
-      pending.delete(data.id)
+      S.pending.delete(data.id)
       if ('error' in data) p.reject(new Error(data.error))
       else p.resolve(data.result)
       return
     }
     if (data.type === 'nav') {
-      navListeners.forEach(fn => fn(data.payload as NavPayload))
+      S.navListeners.forEach(fn => fn(data.payload as NavPayload))
     }
   })
 
@@ -56,7 +75,7 @@ function ensureListening() {
 
   window.addEventListener('keydown', (e: KeyboardEvent) => {
     if (!ARROW_KEYS.has(e.key)) return
-    if (navListeners.size === 0) return
+    if (S.navListeners.size === 0) return
 
     const el = document.activeElement as HTMLElement | null
     const typing = el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA'
@@ -104,16 +123,16 @@ function ensureListening() {
 }
 
 export function callHost<T = unknown>(command: string, args: Record<string, unknown> = {}): Promise<T> {
-  const id = `c${++seq}`
+  const id = `c${++S.seq}`
   return new Promise<T>((resolve, reject) => {
-    pending.set(id, { resolve: resolve as (v: unknown) => void, reject })
+    S.pending.set(id, { resolve: resolve as (v: unknown) => void, reject })
     window.parent.postMessage({ source: 'jimcast-plugin', type: 'call', id, command, args }, '*')
   })
 }
 
 export function onHostNav(handler: (payload: NavPayload) => void): () => void {
-  navListeners.add(handler)
-  return () => navListeners.delete(handler)
+  S.navListeners.add(handler)
+  return () => S.navListeners.delete(handler)
 }
 
 export function reportFocusedItem(info: FocusedItemInfo | null): void {

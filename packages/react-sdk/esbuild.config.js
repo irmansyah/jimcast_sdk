@@ -1,5 +1,5 @@
 // [sdk] packages/react-sdk/esbuild.config.js
-//
+
 // Builds each SDK entry point separately, in both ESM and CJS, so
 // consumers can `import` (Vite/webview bundles) or `require` (esbuild
 // -bundled Node backends, which most plugin backend.ts builds target)
@@ -15,6 +15,13 @@
 // and consumers already get it resolved via node_modules the same way
 // 'react' is — bundling its source in here would defeat the point of
 // having one shared implementation instead of a copy per package.
+//
+// CHANGED: the 'react' entry now also externalizes react-dom (createApp calls
+// react-dom/client). NOTE the 'react' entry still inlines a copy of src/client/*
+// (useHostBridge -> ../client, createApp -> ../client/theme|storage). That's safe
+// only because client/index.ts keeps its mutable state on globalThis — see
+// client/index.ts.PATCH.txt. If you ever add module-level state elsewhere in
+// src/client, do the same or make the react entry import the client entry externally.
 import { build } from 'esbuild'
 const entries = [
   { name: 'protocol', entry: 'src/protocol.ts', platform: 'neutral' },
@@ -22,12 +29,15 @@ const entries = [
   { name: 'server', entry: 'src/server/index.ts', platform: 'node' },
   { name: 'react', entry: 'src/react/index.ts', platform: 'browser' },
 ]
+
+const browserExternal = ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', '@jimcast/protocol']
+
 for (const { name, entry, platform } of entries) {
   const shared = {
     entryPoints: [entry],
     bundle: true,
     platform,
-    external: platform === 'browser' ? ['react', '@jimcast/protocol'] : ['@jimcast/protocol'],
+    external: platform === 'browser' ? browserExternal : ['@jimcast/protocol'],
   }
   await build({ ...shared, format: 'esm', outfile: `dist/${name}.mjs` })
   await build({ ...shared, format: 'cjs', outfile: `dist/${name}.cjs` })

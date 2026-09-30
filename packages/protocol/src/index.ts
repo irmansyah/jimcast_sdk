@@ -1,4 +1,7 @@
 // [sdk] packages/protocol/src/index.ts
+
+import type { Document } from './search.js'
+
 export interface IpcRequest {
   id: string
   command: string
@@ -21,4 +24,13 @@ export function isRequest(msg: any): msg is IpcRequest {
 }
 export * from './storage.js'
 export * from './search.js'
+export * from './manifest.js'        // NEW: manifest types, validateManifest, findCollisions
+export * from './commandEngine.js'   // NEW: tokenize, parseArgs, parseCommandLine, usageOf
 export { resolveTheme, defaultTheme, type ThemeContext } from './themes/index.js'
+
+/**
+ * Alias of `Document` under a name that can't be confused with the DOM `Document` type
+ * (which is what an un-imported `Document` silently resolves to when the DOM lib is on).
+ * rpc.ts imports this name.
+ */
+export type CorpusDocument = Document

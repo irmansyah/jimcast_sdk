@@ -1,0 +1,19 @@
+═══ SDK ═══════════════════════════════════════════════════════════════
+NEW
+  [*] packages/protocol/src/manifest.ts
+  [*] packages/protocol/src/commandEngine.ts
+  [*] packages/react-sdk/src/app/createApp.ts          (NOTE: .ts, no JSX)
+  [*] packages/react-sdk/src/app/buildRegistry.ts
+  [*] packages/react-sdk/src/app/keymap.ts
+  [*] packages/react-sdk/src/app/config.ts
+  [*] packages/react-sdk/src/server/defineBackend.ts
+
+REWRITE
+  [*] packages/react-sdk/src/react/commandLine.ts
+
+PATCH (see *.PATCH.txt beside each)
+  packages/protocol/src/index.ts
+  packages/react-sdk/src/react/index.ts
+  packages/react-sdk/src/server/index.ts
+  packages/react-sdk/package.json  + esbuild.config.js (externals)
+  packages/sdk/src/rpc.ts                          (Document -> CorpusDocument)

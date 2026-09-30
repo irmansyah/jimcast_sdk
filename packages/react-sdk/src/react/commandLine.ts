@@ -1,170 +1,161 @@
 // [sdk] packages/react-sdk/src/react/commandLine.ts
-//
-// Client-side "nested command line" primitive — the in-webview vim-style
-// `:command` affordance a plugin's own UI exposes, standardized so every
-// plugin gets bang-skip, y/n confirm, history recall, and timed feedback
-// for free instead of hand-rolling them (see jimcast-react-rest/App.tsx's
-// original runCommand()/commandHistory/deleteConfirmId state, which this
-// replaces).
-//
-// Deliberately separate from ../server/commands.ts: that's the host
-// invoking a named RPC in the backend process; this is the user typing
-// into the plugin's own iframe. They can compose (a CommandLineCommand's
-// run() is free to call callHost()) but neither depends on the other.
-import { useCallback, useRef, useState } from 'react'
+
+// In-webview vim-style ":" command line.
+// Changes vs. before:
+//  - run() may be async; errors thrown become error feedback
+//  - ctx.confirm(msg) -> Promise<boolean> (bang resolves true immediately)
+//  - legacy { confirm, onConfirm } result still supported (kanban / rest plugins)
+//  - name/alias collisions are reported at registry creation
+import { useCallback, useMemo, useRef, useState } from 'react'
 
 export interface CommandContext {
-  /** Text after the command name, already trimmed. */
   rest: string
-  /** True if the command name ended with "!" (bang = skip confirmation). */
   bang: boolean
+  confirm: (message: string) => Promise<boolean>
 }
 
 export type CommandResult =
   | { ok: true; message?: string }
   | { ok: false; message: string }
-  /** Ask before proceeding — the y/n sub-mode. */
+  /** @deprecated use ctx.confirm() */
   | { confirm: true; message: string; onConfirm: () => void; onCancel?: () => void }
   | void
 
 export interface CommandLineCommand {
-  /** Primary name, e.g. "send". Matched case-insensitively. */
   name: string
-  /** Extra names resolving to this command, e.g. ["s"]. */
   aliases?: string[]
-  /** Shown in help/placeholder, e.g. "send [name|#]". */
   usage?: string
   description?: string
-  run: (ctx: CommandContext) => CommandResult
+  pending?: string
+  run: (ctx: CommandContext) => CommandResult | Promise<CommandResult>
 }
 
 export type CommandLineRegistry = CommandLineCommand[]
 
-export interface Feedback {
-  type: 'ok' | 'error'
-  text: string
-}
+export interface Feedback { type: 'ok' | 'error'; text: string }
 
 export interface UseCommandLineResult {
   isOpen: boolean
   value: string
   setValue: (v: string) => void
   feedback: Feedback | null
-  /** Non-null while waiting on a y/n confirm from a command's run(). */
   pendingConfirm: { message: string } | null
+  /** Text of the in-flight async command, or null. */
+  busy: string | null
   open: () => void
   close: () => void
-  /** Call on Enter in the command input. */
   submit: () => void
-  /** Call when the user types y/yes or n/no while pendingConfirm is set. */
   answerConfirm: (yes: boolean) => void
   historyUp: () => void
   historyDown: () => void
   notify: (f: Feedback) => void
 }
 
-function findCommand(registry: CommandLineRegistry, name: string): CommandLineCommand | undefined {
-  const lower = name.toLowerCase()
-  return registry.find((c) => c.name.toLowerCase() === lower || c.aliases?.some((a) => a.toLowerCase() === lower))
+const norm = (s: string) => s.toLowerCase()
+
+function findCommand(registry: CommandLineRegistry, name: string) {
+  const l = norm(name)
+  return registry.find((c) => norm(c.name) === l || c.aliases?.some((a) => norm(a) === l))
+}
+
+export function findRegistryCollisions(registry: CommandLineRegistry): string[] {
+  const seen = new Map<string, string>()
+  const out: string[] = []
+  for (const c of registry) {
+    for (const k of [c.name, ...(c.aliases ?? [])].map(norm)) {
+      const prev = seen.get(k)
+      if (prev !== undefined) out.push(`"${k}" is used by both "${prev}" and "${c.name}"`)
+      else seen.set(k, c.name)
+    }
+  }
+  return out
 }
 
 const FEEDBACK_MS = 3200
+type Pending = { message: string; resolve: (yes: boolean) => void }
 
 export function useCommandLine(registry: CommandLineRegistry): UseCommandLineResult {
   const [isOpen, setIsOpen] = useState(false)
   const [value, setValue] = useState('')
   const [feedback, setFeedback] = useState<Feedback | null>(null)
-  const [pendingConfirm, setPendingConfirm] = useState<{
-    message: string
-    onConfirm: () => void
-    onCancel?: () => void
-  } | null>(null)
+  const [pendingConfirm, setPendingConfirm] = useState<Pending | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
   const [history, setHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState<number | null>(null)
-  const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const showFeedback = useCallback((f: Feedback) => {
+  useMemo(() => {
+    const dupes = findRegistryCollisions(registry)
+    if (dupes.length) console.error('[jimcast/react-sdk] command collisions:', dupes.join('; '))
+  }, [registry])
+
+  const notify = useCallback((f: Feedback) => {
     setFeedback(f)
-    if (feedbackTimer.current) clearTimeout(feedbackTimer.current)
-    feedbackTimer.current = setTimeout(() => setFeedback(null), FEEDBACK_MS)
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => setFeedback(null), FEEDBACK_MS)
   }, [])
 
-  const open = useCallback(() => {
-    setIsOpen(true)
-    setValue('')
-    setHistoryIndex(null)
-  }, [])
+  const open = useCallback(() => { setIsOpen(true); setValue(''); setHistoryIndex(null) }, [])
+  const close = useCallback(() => { setIsOpen(false); setValue(''); setHistoryIndex(null); setPendingConfirm(null) }, [])
 
-  const close = useCallback(() => {
-    setIsOpen(false)
-    setValue('')
-    setHistoryIndex(null)
-    setPendingConfirm(null)
-  }, [])
+  const answerConfirm = useCallback((yes: boolean) => {
+    if (!pendingConfirm) return
+    pendingConfirm.resolve(yes)
+    close()
+  }, [pendingConfirm, close])
 
-  const answerConfirm = useCallback(
-    (yes: boolean) => {
-      if (!pendingConfirm) return
-      if (yes) pendingConfirm.onConfirm()
-      else pendingConfirm.onCancel?.()
-      setPendingConfirm(null)
-      close()
-    },
-    [pendingConfirm, close],
-  )
-
-  const submit = useCallback(() => {
+  const submit = useCallback(async () => {
     const trimmed = value.trim()
-
     if (pendingConfirm) {
-      const lower = trimmed.toLowerCase()
-      if (lower === 'y' || lower === 'yes') answerConfirm(true)
-      else answerConfirm(false)
+      const l = trimmed.toLowerCase()
+      answerConfirm(l === 'y' || l === 'yes')
       return
     }
-
     if (!trimmed) return close()
-    setHistory((prev) => [...prev, trimmed])
+    setHistory((p) => [...p, trimmed])
 
-    const spaceIdx = trimmed.indexOf(' ')
-    const cmdRaw = spaceIdx === -1 ? trimmed : trimmed.slice(0, spaceIdx)
-    const rest = spaceIdx === -1 ? '' : trimmed.slice(spaceIdx + 1).trim()
-    const bang = cmdRaw.endsWith('!')
-    const name = bang ? cmdRaw.slice(0, -1) : cmdRaw
+    const sp = trimmed.indexOf(' ')
+    const raw = sp === -1 ? trimmed : trimmed.slice(0, sp)
+    const rest = sp === -1 ? '' : trimmed.slice(sp + 1).trim()
+    const bang = raw.endsWith('!')
+    const name = bang ? raw.slice(0, -1) : raw
 
     const cmd = findCommand(registry, name)
-    if (!cmd) {
-      showFeedback({ type: 'error', text: `Unknown command: "${cmdRaw}"` })
-      return close()
+    if (!cmd) { notify({ type: 'error', text: `Unknown command: "${raw}"` }); return close() }
+
+    const confirm = (message: string) =>
+      bang
+        ? Promise.resolve(true)
+        : new Promise<boolean>((resolve) => { setPendingConfirm({ message, resolve }); setValue('') })
+
+    let result: CommandResult
+    if (cmd.pending) setBusy(cmd.pending)
+    try {
+      result = await cmd.run({ rest, bang, confirm })
+    } catch (e) {
+      result = { ok: false, message: e instanceof Error ? e.message : String(e) }
+    } finally {
+      setBusy(null)
     }
 
-    const result = cmd.run({ rest, bang })
     if (result && 'confirm' in result) {
-      // Bang skips the confirm step entirely.
-      if (bang) {
-        result.onConfirm()
-        return close()
-      }
-      setPendingConfirm(result)
+      if (bang) { result.onConfirm(); return close() }
+      const r = result
+      setPendingConfirm({ message: r.message, resolve: (yes) => (yes ? r.onConfirm() : r.onCancel?.()) })
       setValue('')
-      return // stay open, in confirm sub-mode
+      return // stay open in y/n mode
     }
     if (result && 'ok' in result) {
-      showFeedback(
-        result.ok
-          ? { type: 'ok', text: result.message ?? 'Done' }
-          : { type: 'error', text: result.message },
-      )
+      notify(result.ok ? { type: 'ok', text: result.message ?? 'Done' } : { type: 'error', text: result.message })
     }
     close()
-  }, [value, pendingConfirm, registry, answerConfirm, close, showFeedback])
+  }, [value, pendingConfirm, registry, answerConfirm, close, notify])
 
   const historyUp = useCallback(() => {
     setHistoryIndex((idx) => {
       if (history.length === 0) return idx
       const next = idx === null ? history.length - 1 : Math.max(0, idx - 1)
-      setValue(history[next])
-      return next
+      setValue(history[next] ?? ''); return next
     })
   }, [history])
 
@@ -172,14 +163,10 @@ export function useCommandLine(registry: CommandLineRegistry): UseCommandLineRes
     setHistoryIndex((idx) => {
       if (idx === null) return null
       const next = idx + 1
-      if (next >= history.length) {
-        setValue('')
-        return null
-      }
-      setValue(history[next])
-      return next
+      if (next >= history.length) { setValue(''); return null }
+      setValue(history[next] ?? ''); return next
     })
   }, [history])
 
-  return { isOpen, value, setValue, feedback, pendingConfirm, open, close, submit, answerConfirm, historyUp, historyDown, notify: showFeedback }
+  return { isOpen, value, setValue, feedback, pendingConfirm, busy, open, close, submit, answerConfirm, historyUp, historyDown, notify }
 }

@@ -291,7 +291,9 @@ async function handleCoreRequest(
     if (!plugin.corpus) return { documents: [] };
 
     const context = buildContext(envContext, buildHostContext(rawHost), transport);
-    const documents: Document[] = await plugin.corpus(context);
+    // CorpusDocument, not the bare `Document`: without an import, `Document`
+    // silently resolves to the browser DOM type when the DOM lib is enabled.
+    const documents: CorpusDocument[] = await plugin.corpus(context);
     return { documents };
   }
 
@@ -358,12 +360,12 @@ async function handleCoreRequest(
       hostContext: RawHostContext;
       query?:      string;
     };
-  
+
     const widget = findWidget(plugin, widgetId);
     if (!widget) throw new Error(`Unknown widget: ${widgetId}`);
-  
+
     const context = buildContext(envContext, buildHostContext(rawHost), transport);
-  
+
     // A widget defines exactly one of `render` / `renderQuery` (see
     // WidgetDescriptorRenderVariant in widget.ts) — both must be handled,
     // not just `render`. renderQuery can also legitimately return `null`
@@ -377,9 +379,9 @@ async function handleCoreRequest(
     } else {
       throw new Error(`Widget "${widgetId}" defines neither render nor renderQuery`);
     }
-  
+
     if (content == null) return { content: null };
-  
+
     return {
       content: serializeContent(widgetId, content, context),
       section: serializeSection(widget.section),
