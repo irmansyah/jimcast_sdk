@@ -13,6 +13,7 @@ import type { ExecOptions, ExecResult } from "./process.js";
 import { resolveTheme } from "./themes/index.js";
 import type {
   AnyWidget,
+  WidgetAction,
   WidgetContent,
   WidgetItem,
   WidgetActionFn,
@@ -28,19 +29,10 @@ import {
 } from "@jimcast/protocol";
 
 // ---------------------------------------------------------------------------
-// Protocol types
-// ---------------------------------------------------------------------------
-
-// CoreRequest/CoreResponse used to be defined locally here — they were
-// structurally identical to @jimcast/protocol's IpcRequest/IpcResponse
-// (which also serve the webview<->host transport in @jimcast/react-sdk).
-// Now imported from there so there's exactly one JS-side copy of this wire
-// shape to keep in sync with domain::plugin::protocol.rs, instead of two
-// independently-drifting ones.
-
-// ---------------------------------------------------------------------------
 // Transport
 // ---------------------------------------------------------------------------
+// Wire types (IpcRequest/IpcResponse) come from @jimcast/protocol so there is
+// one JS-side copy to keep in sync with domain::plugin::protocol.rs.
 
 type PendingResolve = (value: unknown) => void;
 type PendingReject  = (reason: Error)  => void;
@@ -135,100 +127,92 @@ interface RegisteredAction {
   ctx: ExecutionContext;
 }
 
-// Keyed by a stable `wfn_<widgetId>_<itemId>` id, NOT a fresh randomUUID per
-// render. Widgets with `repeat` re-render on a timer (e.g. every second) —
-// minting a new random id each time and never removing the old one meant
-// this map grew without bound for the life of the plugin process. Using a
-// stable key means a re-render simply overwrites the previous entry (which
-// also keeps `ctx` fresh, since re-render passes a new ExecutionContext).
+// Keyed by a stable `wfn_<scope>_<itemId>` id, NOT a fresh randomUUID per
+// render: widgets with `repeat` re-render on a timer, and random ids would
+// grow this map without bound. A stable key means a re-render overwrites the
+// previous entry (which also refreshes `ctx`).
 //
-// `widgetId` here is really a "scope" string, not always a literal widget
-// id — for items inside a 'group' section it's `${widgetId}:${sectionId}`
-// (see serializeContent's 'group' case below), so that two different
-// sections reusing the same item id (e.g. both having a "delete" row)
-// don't collide in this registry. It's still stable across repeat
-// re-renders since the scope string is deterministic given the same
-// widgetId/section id, which is all that "stable key" behavior needs.
+// `scope` is usually the widget id; inside a 'group' it is
+// `${widgetId}:${sectionId}` so two sections reusing an item id don't collide.
 const widgetActionRegistry = new Map<string, RegisteredAction>();
 
-function actionFnId(widgetId: string, itemId: string): string {
-  return `wfn_${widgetId}_${itemId}`;
+const FORM_ACTION_ITEM_ID = "__form__";
+
+function actionFnId(scope: string, itemId: string): string {
+  return `wfn_${scope}_${itemId}`;
 }
 
 function registerActionFn(fnId: string, fn: WidgetActionFn, ctx: ExecutionContext): void {
   widgetActionRegistry.set(fnId, { fn, ctx });
 }
 
-function serializeItem(widgetId: string, item: WidgetItem, ctx: ExecutionContext): unknown {
+function serializeItem(scope: string, item: WidgetItem<boolean>, ctx: ExecutionContext): unknown {
   if (typeof item.action === "function") {
-    const fnId = actionFnId(widgetId, item.id);
+    const fnId = actionFnId(scope, item.id);
     registerActionFn(fnId, item.action, ctx);
     return { ...item, action: { _fnId: fnId } };
   }
-  // `style` (see widget.ts's WidgetItemStyle) needs no special handling
-  // here — it's plain JSON-safe data, so it rides along in this spread
-  // exactly like `attribute`/`params` already do.
+  // style / pinned / attribute / params are plain JSON and ride along as-is.
   return item;
 }
 
-function serializeContent(widgetId: string, content: WidgetContent<boolean>, ctx: ExecutionContext): unknown {
-  // Only `WidgetContent` variants ever pass through here — plugin content is
-  // sent to core as newline-delimited JSON over stdin/stdout (see file
-  // header), so nothing that can't survive `JSON.stringify` (e.g. a raw
-  // React node / render function) is representable in this type to begin
-  // with. Widgets needing that escape hatch are a core-only capability;
-  // see widget.ts's WidgetExpandableChild for why plugins only get
-  // 'widget' | 'custom', not 'component'.
+function serializeContent(scope: string, content: WidgetContent<boolean>, ctx: ExecutionContext): unknown {
+  // Only JSON-representable content reaches here (see widget.ts), so the only
+  // thing that can't survive JSON.stringify is a function `action`. Every
+  // variant that can hold one must be walked:
+
+  // rows / columns / list / badges / grid-* / progress
   if ("datas" in content) {
     return {
       ...content,
-      datas: (content.datas as readonly WidgetItem[]).map((item) =>
-        serializeItem(widgetId, item, ctx),
+      datas: (content.datas as readonly WidgetItem<boolean>[]).map((item) =>
+        serializeItem(scope, item, ctx),
       ),
     };
   }
 
-  // 'group' content has no top-level `datas` — its items live nested
-  // inside each section's own content — so without this case it would
-  // fall through to the plain `return content` below and every function
-  // `action` inside every section would be silently dropped by
-  // JSON.stringify (functions serialize to nothing) instead of being
-  // swapped for a `{ _fnId }` reference the way a top-level widget's
-  // items are. Recursing here is what makes function actions work
-  // identically whether an item sits directly on a widget or inside one
-  // of its group's sections.
-  //
-  // Each section is serialized under its own scope
-  // (`${widgetId}:${section.id}`) rather than the shared `widgetId`, so
-  // two sections that happen to reuse the same item id don't collide in
-  // widgetActionRegistry — see the comment on that map above.
+  // 'text' carries a single item in `data` (not `datas`); without this case a
+  // function action on it was silently dropped.
+  if (content.type === "text") {
+    return { ...content, data: serializeItem(scope, content.data, ctx) };
+  }
+
+  // 'form' carries its submit action on the content itself.
+  if (content.type === "form" && typeof content.action === "function") {
+    const fnId = actionFnId(scope, FORM_ACTION_ITEM_ID);
+    registerActionFn(fnId, content.action, ctx);
+    return { ...content, action: { _fnId: fnId } as WidgetAction<boolean> };
+  }
+
+  // 'group' nests content per section; each section gets its own scope so
+  // item ids can repeat across sections. direction/gap and the per-section
+  // sizing fields (flex, height, maxHeight, scrollable, navigable) are plain
+  // JSON and pass through the spreads.
   if (content.type === "group") {
     return {
       ...content,
       sections: content.sections.map((section) => ({
         ...section,
-        content: serializeContent(`${widgetId}:${section.id}`, section.content, ctx),
+        content: serializeContent(`${scope}:${section.id}`, section.content, ctx),
       })),
     };
   }
 
+  // panel / website / image / terminal / mirror_browser / error / divider
   return content;
 }
 
-// Core's render_widget expects the wire's `section` object keyed in
-// snake_case (`title_show`, `navigation_active`,
-// `query_search_active` — see [core] plugins.rs), while WidgetSectionOptions
-// stays camelCase on the JS/SDK side for authoring ergonomics. Translate
-// here, at the RPC boundary, rather than asking plugin authors to know
-// core's wire casing. Fields the plugin didn't set are simply omitted
-// (JSON.stringify drops `undefined` values), so core's own defaulting
-// logic still applies for anything left unspecified.
+// Core expects `section` in snake_case ([core] RenderWidgetResult.section);
+// WidgetSectionOptions is camelCase for authoring. `undefined` fields are
+// dropped by JSON.stringify, so core's defaults still apply.
 function serializeSection(section: WidgetSectionOptions | undefined): unknown {
   if (!section) return undefined;
   return {
+    title:               section.title,
     title_show:          section.titleShow,
     navigation_active:   section.navigationActive,
     query_search_active: section.querySearchActive,
+    padding:             section.padding,
   };
 }
 
@@ -247,11 +231,23 @@ export async function bootstrapPlugin(plugin: Plugin): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// Widget lookup
+// Widget lookup / rendering
 // ---------------------------------------------------------------------------
 
 function findWidget(plugin: Plugin, widgetId: string): AnyWidget | undefined {
   return plugin.widgets?.find((w) => w.id === widgetId);
+}
+
+/** A widget defines exactly one of `render` / `renderQuery`; `renderQuery` may return null. */
+async function renderOwn(
+  widget: AnyWidget,
+  ctx:    ExecutionContext,
+  query?: string,
+  params?: Record<string, string>,
+): Promise<WidgetContent<boolean> | null> {
+  if (widget.render)      return widget.render(ctx, params);
+  if (widget.renderQuery) return widget.renderQuery(ctx, query ?? "");
+  throw new Error(`Widget "${widget.id}" defines neither render nor renderQuery`);
 }
 
 // ---------------------------------------------------------------------------
@@ -291,8 +287,8 @@ async function handleCoreRequest(
     if (!plugin.corpus) return { documents: [] };
 
     const context = buildContext(envContext, buildHostContext(rawHost), transport);
-    // CorpusDocument, not the bare `Document`: without an import, `Document`
-    // silently resolves to the browser DOM type when the DOM lib is enabled.
+    // CorpusDocument, not the bare `Document` (which resolves to the DOM type
+    // when the DOM lib is enabled).
     const documents: CorpusDocument[] = await plugin.corpus(context);
     return { documents };
   }
@@ -314,21 +310,18 @@ async function handleCoreRequest(
   }
 
   // ── renderExpandableChild ──────────────────────────────────────────────────
-  // Called by core for quick_tools entries configured as `kind: "external-custom"`
-  // (see [core] widgetRegistry.ts). Unlike resolveExpandableChild, there is no
-  // parent widget/childId pair here — the quick_tools config key IS the fully
-  // qualified widgetId, and core wants that widget rendered directly, the same
-  // way renderWidget does. Kept as a separate command (rather than reusing
-  // "renderWidget") because core reaches it via invoke_plugin_command, not
-  // render_widget — see the "external-component" vs "external-custom" split in
-  // widgetRegistry.ts's buildWidgetExpandablesExpandableChilds for why a plugin
-  // author would pick one over the other.
+  // Called by core for panels configured as `kind: "external-custom"`. Unlike
+  // resolveExpandableChild there is no parent widget/childId pair: the panel
+  // id IS the fully qualified widgetId and is rendered directly. (Contrast
+  // `external-component`, which core reaches through render_widget instead and
+  // which also returns the section options.)
   if (command === "renderExpandableChild") {
-    const { widgetId, envContext, hostContext: rawHost, query } = args as {
+    const { widgetId, envContext, hostContext: rawHost, query, params } = args as {
       widgetId:     string;
       envContext?:  EnvContext;
       hostContext?: RawHostContext;
       query?:       string;
+      params?:      Record<string, string>;
     };
 
     const widget = findWidget(plugin, widgetId);
@@ -340,25 +333,19 @@ async function handleCoreRequest(
       transport,
     );
 
-    let content: WidgetContent<boolean> | null;
-    if (widget.render) {
-      content = await widget.render(context);
-    } else if (widget.renderQuery) {
-      content = await widget.renderQuery(context, query ?? "");
-    } else {
-      throw new Error(`Widget "${widgetId}" defines neither render nor renderQuery`);
-    }
-
+    const content = await renderOwn(widget, context, query, params);
     if (content == null) return { content: null };
     return { content: serializeContent(widgetId, content, context) };
   }
 
+  // ── renderWidget ────────────────────────────────────────────────────────────
   if (command === "renderWidget") {
-    const { widgetId, envContext, hostContext: rawHost, query } = args as {
+    const { widgetId, envContext, hostContext: rawHost, query, params } = args as {
       widgetId:    string;
       envContext:  EnvContext;
       hostContext: RawHostContext;
       query?:      string;
+      params?:     Record<string, string>;
     };
 
     const widget = findWidget(plugin, widgetId);
@@ -366,20 +353,7 @@ async function handleCoreRequest(
 
     const context = buildContext(envContext, buildHostContext(rawHost), transport);
 
-    // A widget defines exactly one of `render` / `renderQuery` (see
-    // WidgetDescriptorRenderVariant in widget.ts) — both must be handled,
-    // not just `render`. renderQuery can also legitimately return `null`
-    // (e.g. "no match for this query"), which must pass through as-is
-    // rather than being force-fed into serializeContent.
-    let content: WidgetContent<boolean> | null;
-    if (widget.render) {
-      content = await widget.render(context);
-    } else if (widget.renderQuery) {
-      content = await widget.renderQuery(context, query ?? "");
-    } else {
-      throw new Error(`Widget "${widgetId}" defines neither render nor renderQuery`);
-    }
-
+    const content = await renderOwn(widget, context, query, params);
     if (content == null) return { content: null };
 
     return {
@@ -419,15 +393,7 @@ async function handleCoreRequest(
       transport,
     );
 
-    let ownContent: WidgetContent<boolean> | null;
-    if (widget.render) {
-      ownContent = await widget.render(context);
-    } else if (widget.renderQuery) {
-      ownContent = await widget.renderQuery(context, query ?? "");
-    } else {
-      throw new Error(`Widget "${widgetId}" defines neither render nor renderQuery`);
-    }
-
+    const ownContent = await renderOwn(widget, context, query);
     if (ownContent == null || !("expandable" in ownContent)) {
       throw new Error(`Widget "${widgetId}" did not return any expandable children`);
     }
@@ -438,29 +404,17 @@ async function handleCoreRequest(
     }
 
     if (child.kind === "widget") {
-      // Only widgets registered on THIS plugin can be looked up here — the
-      // plugin process only has its own `plugin.widgets` array in scope.
-      // A widgetId belonging to a different plugin (e.g. another plugin's
-      // "<other-plugin>.some-widget") can never resolve through this path.
+      // Only widgets registered on THIS plugin can be looked up here.
       const target = findWidget(plugin, child.widgetId);
       if (!target) {
         throw new Error(
           `Expandable child "${childId}" on widget "${widgetId}" references widgetId ` +
           `"${child.widgetId}", which is not registered in this plugin's \`widgets\` ` +
-          `array. Cross-plugin widget references are not supported — point childs[].widgetId ` +
-          `at a widget defined in this same plugin.`,
+          `array. Cross-plugin widget references are not supported.`,
         );
       }
 
-      let content: WidgetContent<boolean> | null;
-      if (target.render) {
-        content = await target.render(context);
-      } else if (target.renderQuery) {
-        content = await target.renderQuery(context, "");
-      } else {
-        throw new Error(`Widget "${child.widgetId}" defines neither render nor renderQuery`);
-      }
-
+      const content = await renderOwn(target, context, "", child.params);
       if (content == null) return { content: null };
       return { content: serializeContent(target.id, content, context) };
     }
@@ -498,13 +452,8 @@ interface RawHostContext {
 }
 
 /**
- * Deserialises the raw `hostContext` payload sent by core into a typed
- * `HostContext`. Core sends only a theme name string — we resolve it to
- * the full ThemeContext here so plugins never deal with raw color maps.
- *
- * `raw` is optional to accommodate call sites (currently just
- * resolveExpandableChild) whose core→plugin tunnel doesn't populate
- * hostContext at all yet — see the comment above that handler.
+ * Core sends only a theme name; resolve it to the full ThemeContext here.
+ * `raw` is partial because some core->plugin paths don't populate hostContext.
  */
 function buildHostContext(raw: Partial<RawHostContext>): HostContext {
   return {

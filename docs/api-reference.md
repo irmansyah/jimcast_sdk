@@ -1,3 +1,5 @@
+# docs/api-reference.md
+
 # `@jimcast/sdk` API Reference
 
 The Jimcast SDK is the contract between the Jimcast core engine and the plugin ecosystem. Everything a plugin can do is available on this page. If something is not listed here, your plugin cannot do it.

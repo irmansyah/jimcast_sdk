@@ -2,6 +2,8 @@
 
 import type { Document } from './search.js'
 
+// ─── IPC wire types ──────────────────────────────────────────────────────────
+
 export interface IpcRequest {
   id: string
   command: string
@@ -22,11 +24,21 @@ export function isResponse(msg: any): msg is IpcResponse {
 export function isRequest(msg: any): msg is IpcRequest {
   return !!msg && typeof msg === 'object' && typeof msg.id === 'string' && typeof msg.command === 'string'
 }
+
+// ─── Re-exports ──────────────────────────────────────────────────────────────
+
 export * from './storage.js'
 export * from './search.js'
-export * from './manifest.js'        // NEW: manifest types, validateManifest, findCollisions
-export * from './commandEngine.js'   // NEW: tokenize, parseArgs, parseCommandLine, usageOf
-export { resolveTheme, defaultTheme, type ThemeContext } from './themes/index.js'
+export * from './manifest.js'
+export * from './commandEngine.js'
+export * from './sectionLabel.js'
+
+// Themes: the six built-in themes, resolveTheme, ThemeName, and the
+// ThemeContext / ThemeColors / ThemeTypography / ThemeSpacing types all
+// come from themes/index.ts. fv / cv / px are helpers that live in
+// themes/theme.ts and are not re-exported by themes/index.ts.
+export * from './themes/index.js'
+export { fv, cv, px } from './themes/theme.js'
 
 /**
  * Alias of `Document` under a name that can't be confused with the DOM `Document` type

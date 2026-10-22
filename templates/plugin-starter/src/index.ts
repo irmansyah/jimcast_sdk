@@ -1,3 +1,4 @@
+// [sdk] templates/plugin-starter/src/index.ts
 /**
  * {{PLUGIN_NAME}} — a Jimcast plugin
  *

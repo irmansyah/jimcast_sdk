@@ -1,7 +1,7 @@
 // [sdk] packages/protocol/src/themes/index.ts
 
 import { defaultTheme }      from "./default.js";
-import { gruvboxDarkTheme }      from "./gruvbox-dark.js";
+import { gruvboxDarkTheme }  from "./gruvbox-dark.js";
 import { gruvboxLightTheme } from "./gruvbox-light.js";
 import { catppuccinTheme }   from "./catppuccin.js";
 import { nordTheme }         from "./nord.js";

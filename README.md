@@ -1,3 +1,5 @@
+# README.md
+
 # @jimcast/sdk
 TODO
 
@@ -283,22 +285,21 @@ This builds your plugin, then copies `dist/`, `dist-backend/`, and
 `package.json` into `~/.jimcast/plugins/your-plugin/`. Re-run it after
 every change you want reflected in the running app.
 
-### 10. Register it as a quick tool
+### 10. Register it as a panel
 
-Add an entry to `~/.jimcast/config.json`:
+Add a `webview` panel to a slot in `~/.jimcast/config.json` (or a profile's `section_slot`):
 
 ```json
 {
-  "quick_tools": [
-    {
-      "id": "your-plugin",
-      "label": "Your Plugin",
-      "kind": "webview",
-      "entry": "dist/index.html"
-    }
-  ]
+  "widget_slot": {
+    "below-input": [
+      { "id": "your-plugin", "label": "Your Plugin", "kind": "webview", "entry": "dist/index.html" }
+    ]
+  }
 }
 ```
+
+A toggle panel (the default) works in `below-input` and `inside-scroll`. Add `"display": "inline"` to render it in place in any slot, though inline webviews don't receive arrow-key navigation. The plugin is the part of the id before the first `.`, so `your-plugin.docs` and `your-plugin.board` can be two panels backed by one plugin. To get a row of buttons, wrap panels in `{ "kind": "group", "id": "tools", "panels": [...] }`.
 
 Restart (or reload) jimcast-core, and your plugin should appear as a quick
 tool, rendering `dist/index.html` inside a sandboxed iframe.

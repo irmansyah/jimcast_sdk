@@ -61,31 +61,50 @@ export {
   createWidget,
   createTmuxTerminalWidget,
   createTmuxTerminalWidgets,
+  buildTmuxSessionAttachScript,
   buildTmuxAttachScript,
 } from "./widget.js";
 export type {
   Widget,
   AnyWidget,
+  // content
   WidgetContent,
   WidgetItem,
-  WidgetAction,
-  WidgetActionFn,
   WidgetAttribute,
   WidgetItemStyle,
-  WidgetGroupSection,
   WidgetColor,
-  WidgetMode,
+  WidgetFormField,
+  WidgetGroupSection,
+  WebsiteTarget,
+  ImageTarget,
+  MirrorBrowserTarget,
+  BrowserKind,
+  TerminalLaunchSpec,
+  // panel content
+  WidgetPanelChild,
+  WidgetPanelChildWidget,
+  WidgetPanelChildExternalComponent,
+  WidgetPanelChildExternalCustom,
+  WidgetPanelChildWebview,
+  // actions
+  WidgetAction,
+  WidgetActionFn,
   ThenClause,
+  // descriptor
   WidgetDescriptor,
   WidgetDescriptorBase,
   WidgetDescriptorExpandable,
+  WidgetSectionOptions,
+  WidgetMode,
+  WidgetSlotName,
+  // expandable
   WidgetExpandableChild,
   WidgetExpandableChildWidget,
   WidgetExpandableChildCustom,
+  // tmux
+  TerminalPanelConfig,
   WidgetExpandableTerminalConfig,
   WidgetExpandableTerminalsConfig,
-  WidgetSlotName,
-  TerminalLaunchSpec,
 } from "./widget.js";
 // Themes
 export { resolveTheme, defaultTheme } from "./themes/index.js";
