@@ -147,13 +147,20 @@ function registerActionFn(fnId: string, fn: WidgetActionFn, ctx: ExecutionContex
 }
 
 function serializeItem(scope: string, item: WidgetItem<boolean>, ctx: ExecutionContext): unknown {
+  let out: Record<string, unknown> = { ...item };
+
   if (typeof item.action === "function") {
     const fnId = actionFnId(scope, item.id);
     registerActionFn(fnId, item.action, ctx);
-    return { ...item, action: { _fnId: fnId } };
+    out.action = { _fnId: fnId };
+  }
+  if (typeof item.clickAction === "function") {
+    const fnId = actionFnId(scope, `${item.id}:click`);
+    registerActionFn(fnId, item.clickAction, ctx);
+    out.clickAction = { _fnId: fnId };
   }
   // style / pinned / attribute / params are plain JSON and ride along as-is.
-  return item;
+  return out;
 }
 
 function serializeContent(scope: string, content: WidgetContent<boolean>, ctx: ExecutionContext): unknown {

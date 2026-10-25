@@ -89,18 +89,12 @@ export type ThenClause<E extends boolean = false> =
   | 'refresh|dismiss'
   | (E extends true ? 'expand' : never)
 
-/**
- * What happens when an item is activated. Every field is optional, as in core:
- * an action may have no shell command at all (`{ insertQuery }` only fills the
- * search bar, `{ then: 'expand' }` only opens the expandable child).
- */
 export interface WidgetAction<E extends boolean = false> {
   cmd?:              string
   params?:           Record<string, string>
   ignore_exit_code?: boolean
   timeout_secs?:     number
   then?:             ThenClause<E>
-  /** Put this text into the search bar instead of (or as well as) running `cmd`. */
   insertQuery?:      string
 }
 
@@ -111,9 +105,8 @@ export interface WidgetItem<E extends boolean = false> {
   attribute?:  WidgetAttribute
   params?:     Record<string, string>
   action?:     WidgetAction<E> | WidgetActionFn
-  /** Container styling (border, background, radius, padding). See WidgetItemStyle. */
+  clickAction?: WidgetAction<E> | WidgetActionFn
   style?:      WidgetItemStyle
-  /** Core keeps pinned items in place (e.g. above filtered results). */
   pinned?:     boolean
 }
 
