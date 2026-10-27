@@ -20,6 +20,8 @@
  * everything that can cross the JSON boundary.
  */
 
+import type { WidgetCliSpec } from "./widgetCli.js";
+import type { WidgetKeySpec } from "./widgetKeys.js";
 import type { ExecutionContext } from "./context.js";
 
 // ---------------------------------------------------------------------------
@@ -100,12 +102,27 @@ export interface WidgetAction<E extends boolean = false> {
 
 export type WidgetActionFn = (values?: Record<string, string>) => Promise<void>;
 
+/**
+ * A function action that also says what core should do afterwards.
+ * Bare function actions cannot ask for a refresh; this can.
+ * On the wire: `{ _fnId, then, insertQuery }`. Core must honor `then` after
+ * invoking the fn (see CORE_CHANGES.md B1).
+ */
+export interface WidgetActionWithFn<E extends boolean = false> {
+  run:          WidgetActionFn
+  then?:        ThenClause<E>
+  insertQuery?: string
+}
+
+export type AnyWidgetAction<E extends boolean = false> =
+  | WidgetAction<E> | WidgetActionFn | WidgetActionWithFn<E>
+
 export interface WidgetItem<E extends boolean = false> {
   id:          string
   attribute?:  WidgetAttribute
   params?:     Record<string, string>
-  action?:     WidgetAction<E> | WidgetActionFn
-  clickAction?: WidgetAction<E> | WidgetActionFn
+  action?:      AnyWidgetAction<E>
+  clickAction?: AnyWidgetAction<E>
   style?:      WidgetItemStyle
   pinned?:     boolean
 }
@@ -261,11 +278,11 @@ export type WidgetContent<E extends boolean = false> =
 // ---------------------------------------------------------------------------
 
 export interface WidgetExpandableChildWidget {
-  id:       string   // matches an item.id in this descriptor's content
+  id:       string
   kind:     'widget'
-  widgetId: string   // id of another widget in THIS plugin's `widgets` array
-  /** Passed as the second argument of the target widget's `render`. */
+  widgetId: string
   params?:  Record<string, string>
+  keyBindings?: Record<string, unknown>
 }
 
 export interface WidgetExpandableChildCustom {
@@ -312,11 +329,13 @@ export interface WidgetSectionOptions {
 
 export interface WidgetDescriptorBase<Exp extends WidgetDescriptorExpandable | undefined = undefined> {
   readonly id:          string;
-  readonly showIn?:     WidgetMode[]
-  readonly action?:     WidgetAction<ExpandEnabled<Exp>>
-  readonly repeat?:     WidgetDescriptorRepeat
-  readonly section?:    WidgetSectionOptions
+  readonly showIn?:     WidgetMode[];
+  readonly action?:     WidgetAction<ExpandEnabled<Exp>>;
+  readonly repeat?:     WidgetDescriptorRepeat;
+  readonly section?:    WidgetSectionOptions;
   readonly expandable?: Exp;
+  readonly cli?:  WidgetCliSpec;
+  readonly keys?: WidgetKeySpec;
 }
 
 /**

@@ -1,5 +1,6 @@
 // [sdk] packages/protocol/src/index.ts
-
+export * from './keys.js'
+export * from './widgetSpecs.js'
 import type { Document } from './search.js'
 
 // ─── IPC wire types ──────────────────────────────────────────────────────────

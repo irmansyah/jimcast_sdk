@@ -14,18 +14,43 @@ import { resolveTheme } from "./themes/index.js";
 import type {
   AnyWidget,
   WidgetAction,
+  WidgetActionFn,
+  WidgetActionWithFn,
   WidgetContent,
   WidgetItem,
-  WidgetActionFn,
   WidgetSectionOptions,
 } from "./widget.js";
+import type { WidgetCliContext, WidgetDispatchOptions } from "./widgetCli.js";
+import type { WidgetKeyContext } from "./widgetKeys.js";
+import {
+  boundCliSpecs,
+  boundKeySpecs,
+  toCliWire,
+  toKeyWire,
+  validateSpecs,
+  type Bound,
+} from "./specs.js";
 import {
   isRequest,
   isResponse,
+  keyLabel,
+  resolveBindings,
+  DISPATCH_TIMEOUT_MS,
+  HOST_GET_CONFIG,
+  HOST_WIDGET_DISPATCH,
+  LIST_WIDGET_SPECS,
+  RUN_WIDGET_CLI,
+  RUN_WIDGET_KEY,
+  type CorpusDocument,
   type IpcRequest,
   type IpcResponse,
+  type KeyBindingsConfig,
+  type ListWidgetSpecsResult,
+  type RunWidgetCliArgs,
+  type RunWidgetCliResult,
+  type RunWidgetKeyArgs,
   type SearchResultItem,
-  type CorpusDocument,
+  type WidgetDispatchArgs,
 } from "@jimcast/protocol";
 
 // ---------------------------------------------------------------------------
@@ -51,14 +76,14 @@ export class RpcTransport {
     this.listen();
   }
 
-  /** Send a request to core and await the response. */
-  send(command: string, args: Record<string, unknown>): Promise<unknown> {
+  /** Send a request to core and await the response. `timeoutMs` for slow host calls (e.g. widget_dispatch). */
+  send(command: string, args: Record<string, unknown>, timeoutMs = PENDING_TIMEOUT_MS): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const id      = crypto.randomUUID();
       const timeout = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error(`RPC timeout: no response for command "${command}" (id=${id})`));
-      }, PENDING_TIMEOUT_MS);
+      }, timeoutMs);
 
       this.pending.set(id, [resolve, reject, timeout]);
       this.write({ id, command, args } satisfies IpcRequest);
@@ -146,18 +171,40 @@ function registerActionFn(fnId: string, fn: WidgetActionFn, ctx: ExecutionContex
   widgetActionRegistry.set(fnId, { fn, ctx });
 }
 
-function serializeItem(scope: string, item: WidgetItem<boolean>, ctx: ExecutionContext): unknown {
-  let out: Record<string, unknown> = { ...item };
+type AnyAction =
+  | WidgetAction<boolean>
+  | WidgetActionFn
+  | WidgetActionWithFn<boolean>
+  | undefined;
 
-  if (typeof item.action === "function") {
-    const fnId = actionFnId(scope, item.id);
-    registerActionFn(fnId, item.action, ctx);
-    out.action = { _fnId: fnId };
+/**
+ * Wire shape of an action:
+ *   static            -> unchanged ({ cmd, params, then, ... })
+ *   function          -> { _fnId }
+ *   { run, then }     -> { _fnId, then, insertQuery }   (core must honor `then` after invoking)
+ */
+function serializeAction(scope: string, key: string, action: AnyAction, ctx: ExecutionContext): unknown {
+  if (typeof action === "function") {
+    const fnId = actionFnId(scope, key);
+    registerActionFn(fnId, action, ctx);
+    return { _fnId: fnId };
   }
-  if (typeof item.clickAction === "function") {
-    const fnId = actionFnId(scope, `${item.id}:click`);
-    registerActionFn(fnId, item.clickAction, ctx);
-    out.clickAction = { _fnId: fnId };
+  if (action && "run" in action && typeof action.run === "function") {
+    const { run, ...rest } = action;
+    const fnId = actionFnId(scope, key);
+    registerActionFn(fnId, run, ctx);
+    return { ...rest, _fnId: fnId };
+  }
+  return action;
+}
+
+function serializeItem(scope: string, item: WidgetItem<boolean>, ctx: ExecutionContext): unknown {
+  const out: Record<string, unknown> = { ...item };
+  if (item.action !== undefined) {
+    out.action = serializeAction(scope, item.id, item.action, ctx);
+  }
+  if (item.clickAction !== undefined) {
+    out.clickAction = serializeAction(scope, `${item.id}:click`, item.clickAction, ctx);
   }
   // style / pinned / attribute / params are plain JSON and ride along as-is.
   return out;
@@ -178,17 +225,14 @@ function serializeContent(scope: string, content: WidgetContent<boolean>, ctx: E
     };
   }
 
-  // 'text' carries a single item in `data` (not `datas`); without this case a
-  // function action on it was silently dropped.
+  // 'text' carries a single item in `data` (not `datas`).
   if (content.type === "text") {
     return { ...content, data: serializeItem(scope, content.data, ctx) };
   }
 
   // 'form' carries its submit action on the content itself.
-  if (content.type === "form" && typeof content.action === "function") {
-    const fnId = actionFnId(scope, FORM_ACTION_ITEM_ID);
-    registerActionFn(fnId, content.action, ctx);
-    return { ...content, action: { _fnId: fnId } as WidgetAction<boolean> };
+  if (content.type === "form") {
+    return { ...content, action: serializeAction(scope, FORM_ACTION_ITEM_ID, content.action, ctx) };
   }
 
   // 'group' nests content per section; each section gets its own scope so
@@ -212,14 +256,18 @@ function serializeContent(scope: string, content: WidgetContent<boolean>, ctx: E
 // Core expects `section` in snake_case ([core] RenderWidgetResult.section);
 // WidgetSectionOptions is camelCase for authoring. `undefined` fields are
 // dropped by JSON.stringify, so core's defaults still apply.
-function serializeSection(section: WidgetSectionOptions | undefined): unknown {
-  if (!section) return undefined;
+// `show_in` and `repeat` are sent for forward compatibility: core's external
+// widget source does not read them yet (see CORE_CHANGES.md).
+function serializeSection(widget: AnyWidget): unknown {
+  const section: WidgetSectionOptions = widget.section ?? {};
   return {
     title:               section.title,
     title_show:          section.titleShow,
     navigation_active:   section.navigationActive,
     query_search_active: section.querySearchActive,
     padding:             section.padding,
+    show_in:             widget.showIn,
+    repeat:              widget.repeat,
   };
 }
 
@@ -228,6 +276,11 @@ function serializeSection(section: WidgetSectionOptions | undefined): unknown {
 // ---------------------------------------------------------------------------
 
 export async function bootstrapPlugin(plugin: Plugin): Promise<void> {
+  // stdout is the RPC channel; report problems on stderr (core inherits it).
+  for (const problem of validateSpecs(plugin)) {
+    console.error(`[jimcast-sdk] ${plugin.name}: ${problem}`);
+  }
+
   let transport: RpcTransport;
 
   const handler = async (command: string, args: unknown, id: string): Promise<unknown> => {
@@ -257,6 +310,23 @@ async function renderOwn(
   throw new Error(`Widget "${widget.id}" defines neither render nor renderQuery`);
 }
 
+/** dispatch(): plugin -> core -> frontend. Resolves after core re-rendered the widget. */
+function makeDispatch(
+  transport: RpcTransport,
+  bound:     Bound<unknown>,
+  ctx:       ExecutionContext,
+) {
+  return async (item: WidgetItem<boolean>, opts?: WidgetDispatchOptions): Promise<void> => {
+    const payload: WidgetDispatchArgs = {
+      widgetId: bound.widgetId,
+      owns:     bound.owns,
+      item:     serializeItem(`${bound.widgetId}:dispatch`, item, ctx),
+      focus:    opts?.focus,
+    };
+    await transport.send(HOST_WIDGET_DISPATCH, payload as unknown as Record<string, unknown>, DISPATCH_TIMEOUT_MS);
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Request handler
 // ---------------------------------------------------------------------------
@@ -279,7 +349,7 @@ async function handleCoreRequest(
 
     if (!plugin.search) return { items: [] };
 
-    const context = buildContext(envContext, buildHostContext(rawHost), transport);
+    const context = buildContext(envContext, buildHostContext(rawHost), transport, plugin);
     const items: SearchResultItem[] = await plugin.search(query, context);
     return { items: items.slice(0, SEARCH_RESULT_CAP) };
   }
@@ -293,7 +363,7 @@ async function handleCoreRequest(
 
     if (!plugin.corpus) return { documents: [] };
 
-    const context = buildContext(envContext, buildHostContext(rawHost), transport);
+    const context = buildContext(envContext, buildHostContext(rawHost), transport, plugin);
     // CorpusDocument, not the bare `Document` (which resolves to the DOM type
     // when the DOM lib is enabled).
     const documents: CorpusDocument[] = await plugin.corpus(context);
@@ -311,7 +381,7 @@ async function handleCoreRequest(
     const cmd = findCommand(plugin, commandId);
     if (!cmd) throw new Error(`Unknown command: ${commandId}`);
 
-    const context = buildContext(envContext, buildHostContext(rawHost), transport);
+    const context = buildContext(envContext, buildHostContext(rawHost), transport, plugin);
     const result  = await cmd.execute(context);
     return { items: result ?? [] };
   }
@@ -338,6 +408,7 @@ async function handleCoreRequest(
       envContext ?? ({} as EnvContext),
       buildHostContext(rawHost ?? {}),
       transport,
+      plugin,
     );
 
     const content = await renderOwn(widget, context, query, params);
@@ -358,14 +429,14 @@ async function handleCoreRequest(
     const widget = findWidget(plugin, widgetId);
     if (!widget) throw new Error(`Unknown widget: ${widgetId}`);
 
-    const context = buildContext(envContext, buildHostContext(rawHost), transport);
+    const context = buildContext(envContext, buildHostContext(rawHost), transport, plugin);
 
     const content = await renderOwn(widget, context, query, params);
     if (content == null) return { content: null };
 
     return {
       content: serializeContent(widgetId, content, context),
-      section: serializeSection(widget.section),
+      section: serializeSection(widget),
     };
   }
 
@@ -375,6 +446,70 @@ async function handleCoreRequest(
     const entry = widgetActionRegistry.get(fnId);
     if (!entry) throw new Error(`Unknown widget action fn: ${fnId}`);
     await entry.fn(values);
+    return {};
+  }
+
+  // ── listWidgetSpecs ───────────────────────────────────────────────────────
+  // Core asks once (per plugin start) which CLI commands / key actions this
+  // plugin's widgets declare, and registers proxies for them.
+  if (command === LIST_WIDGET_SPECS) {
+    const result: ListWidgetSpecsResult = {
+      cli:  boundCliSpecs(plugin).map(toCliWire),
+      keys: boundKeySpecs(plugin).map(toKeyWire),
+    };
+    return result;
+  }
+
+  // ── runWidgetCli ──────────────────────────────────────────────────────────
+  if (command === RUN_WIDGET_CLI) {
+    const a = args as RunWidgetCliArgs;
+    const bound = boundCliSpecs(plugin).find((s) => s.id === a.spec);
+    if (!bound) throw new Error(`Unknown widget CLI spec: ${a.spec}`);
+    const cmd = bound.spec.commands.find((c) => c.id === a.command);
+    if (!cmd) {
+      throw new Error(
+        `widget "${bound.id}" has no command "${a.command}". Available: ${bound.spec.commands.map((c) => c.id).join(", ")}`,
+      );
+    }
+
+    const base = buildContext(
+      (a.envContext ?? {}) as EnvContext,
+      buildHostContext((a.hostContext ?? {}) as RawHostContext),
+      transport,
+      plugin,
+    );
+    let showBar = false;
+    const ctx: WidgetCliContext = {
+      ...base,
+      args:     a.args ?? [],
+      cwd:      a.cwd ?? null,
+      dispatch: makeDispatch(transport, bound, base),
+      showBar:  () => { showBar = true; },
+    };
+    const value = await cmd.run(ctx);
+    return { value: value ?? null, showBar } satisfies RunWidgetCliResult;
+  }
+
+  // ── runWidgetKey ──────────────────────────────────────────────────────────
+  if (command === RUN_WIDGET_KEY) {
+    const a = args as RunWidgetKeyArgs;
+    const bound = boundKeySpecs(plugin).find((s) => s.id === a.spec);
+    if (!bound) throw new Error(`Unknown widget key spec: ${a.spec}`);
+    const action = bound.spec.actions.find((x) => x.id === a.action);
+    if (!action) throw new Error(`widget "${bound.id}" has no key action "${a.action}"`);
+
+    const base = buildContext(
+      (a.envContext ?? {}) as EnvContext,
+      buildHostContext((a.hostContext ?? {}) as RawHostContext),
+      transport,
+      plugin,
+    );
+    const ctx: WidgetKeyContext = {
+      ...base,
+      focusedItemId: a.focusedItemId ?? null,
+      dispatch:      makeDispatch(transport, bound, base),
+    };
+    await action.run(ctx);
     return {};
   }
 
@@ -398,6 +533,7 @@ async function handleCoreRequest(
       envContext ?? ({} as EnvContext),
       buildHostContext(rawHost ?? {}),
       transport,
+      plugin,
     );
 
     const ownContent = await renderOwn(widget, context, query);
@@ -469,10 +605,16 @@ function buildHostContext(raw: Partial<RawHostContext>): HostContext {
   };
 }
 
+// key_bindings is read on every render of a widget that shows key hints, so
+// cache it briefly (same TTL as core's loadKeyBindings).
+let keyBindingsCache: { t: number; v: KeyBindingsConfig } | null = null;
+const KEY_BINDINGS_TTL_MS = 1500;
+
 function buildContext(
   env:       EnvContext,
   host:      HostContext,
   transport: RpcTransport,
+  plugin?:   Plugin,
 ): ExecutionContext {
   const send    = (command: string, args: Record<string, unknown>) => transport.send(command, args);
   const storage = createStorage(send);
@@ -521,6 +663,34 @@ function buildContext(
 
     async openUrl(url) {
       await send("ui_open_url", { url });
+    },
+
+    async getConfig<T = unknown>(section: string): Promise<T> {
+      return send(HOST_GET_CONFIG, { section }) as Promise<T>;
+    },
+
+    async keyLabels(specId: string): Promise<Record<string, string>> {
+      const bound = plugin ? boundKeySpecs(plugin).find((s) => s.id === specId) : undefined;
+      if (!bound) return {};
+
+      let cfg: KeyBindingsConfig = {};
+      if (keyBindingsCache && Date.now() - keyBindingsCache.t < KEY_BINDINGS_TTL_MS) {
+        cfg = keyBindingsCache.v;
+      } else {
+        try {
+          const v = await send(HOST_GET_CONFIG, { section: "key_bindings" });
+          cfg = v && typeof v === "object" ? (v as KeyBindingsConfig) : {};
+        } catch {
+          cfg = {};
+        }
+        keyBindingsCache = { t: Date.now(), v: cfg };
+      }
+
+      const out: Record<string, string> = {};
+      for (const { action, keys } of resolveBindings(specId, bound.spec.actions, cfg)) {
+        out[action.id] = keys[0] ? keyLabel(keys[0]) : "";
+      }
+      return out;
     },
   };
 }

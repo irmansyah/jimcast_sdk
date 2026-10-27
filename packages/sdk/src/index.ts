@@ -115,3 +115,12 @@ export type {
   ThemeSpacing,
   ThemeContext,
 } from "./themes/theme.js";
+// Widget CLI + keys
+export type {
+  WidgetCliSpec, WidgetCliCommand, WidgetCliContext, WidgetDispatchOptions,
+} from "./widgetCli.js";
+export type {
+  WidgetKeySpec, WidgetKeyAction, WidgetKeyContext,
+} from "./widgetKeys.js";
+export { parseKey, keyLabel, resolveBindings } from "@jimcast/protocol";
+export type { ParsedKey, KeyBindingsConfig } from "@jimcast/protocol";
