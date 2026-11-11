@@ -3,14 +3,14 @@
 // Command definition and plugin manifest
 export {
   definePlugin,
-  createCommand,
-  createCommandGroup,
+  // createCommand,
+  // createCommandGroup,
 } from "./command.js";
 export type {
-  Command,
-  CommandDefinition,
-  CommandGroup,
-  CommandResult,
+  // Command,
+  // CommandDefinition,
+  // CommandGroup,
+  // CommandResult,
   Plugin,
   PluginDefinition,
 } from "./command.js";

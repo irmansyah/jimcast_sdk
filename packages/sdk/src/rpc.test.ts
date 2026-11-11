@@ -1,14 +1,14 @@
 // [sdk] packages/sdk/src/rpc.test.ts
-import { describe, it, expect, vi } from 'vitest'
+import { it, expect, vi } from 'vitest'
 import { PassThrough } from 'node:stream'
 import { bootstrapPlugin } from './rpc.js'
-import { definePlugin, createCommand } from './command.js'
+import { definePlugin } from './command.js'
 import type { SearchResultItem, Document } from '@jimcast/protocol'
 
 function makePlugin(overrides = {}) {
   return definePlugin({
     name: 'test-plugin',
-    commands: [],
+    // commands: [],
     search: vi.fn(async (query: string): Promise<SearchResultItem[]> =>
       query === 'match'
         ? [{

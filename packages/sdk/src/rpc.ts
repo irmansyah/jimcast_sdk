@@ -388,22 +388,6 @@ async function handleCoreRequest(
     return { documents };
   }
 
-  // ── executeCommand ────────────────────────────────────────────────────────
-  if (command === "executeCommand") {
-    const { commandId, envContext, hostContext: rawHost } = args as {
-      commandId:   string;
-      envContext:  EnvContext;
-      hostContext: RawHostContext;
-    };
-
-    const cmd = findCommand(plugin, commandId);
-    if (!cmd) throw new Error(`Unknown command: ${commandId}`);
-
-    const context = buildContext(envContext, buildHostContext(rawHost), transport, plugin);
-    const result  = await cmd.execute(context);
-    return { items: result ?? [] };
-  }
-
   // ── renderExpandableChild ──────────────────────────────────────────────────
   // Called by core for panels configured as `kind: "external-custom"`. Unlike
   // resolveExpandableChild there is no parent widget/childId pair: the panel
@@ -607,18 +591,6 @@ async function handleCoreRequest(
   }
 
   throw new Error(`Unknown command: ${command}`);
-}
-
-function findCommand(plugin: Plugin, commandId: string) {
-  for (const entry of plugin.commands) {
-    if (entry._type === "command" && entry.id === commandId) return entry;
-    if (entry._type === "command-group") {
-      for (const cmd of entry.commands) {
-        if (cmd.id === commandId) return cmd;
-      }
-    }
-  }
-  return null;
 }
 
 // ---------------------------------------------------------------------------
