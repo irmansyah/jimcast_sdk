@@ -1,4 +1,4 @@
-// [sdk] packages/sdk/src/context.ts
+// packages/sdk/src/context.ts
 
 /**
  * Context objects passed to command `execute()` functions.
@@ -181,6 +181,41 @@ export interface ExecutionContext {
    * ```
    */
   execStreamed(command: string, options: ExecStreamOptions): Promise<ExecResult>;
+
+  // -------------------------------------------------------------------------
+  // Host configuration
+  // -------------------------------------------------------------------------
+
+  /**
+   * Reads one section of the host's configuration (e.g. `"key_bindings"`).
+   *
+   * @param section - The config section name.
+   * @returns The section's contents (an empty object when missing).
+   *
+   * @example
+   * ```typescript
+   * const keys = await context.getConfig<Record<string, unknown>>("key_bindings");
+   * ```
+   */
+  getConfig<T = unknown>(section: string): Promise<T>;
+
+  /**
+   * Returns the first configured key label for each key action of a widget
+   * key spec, keyed by action id. Unbound actions map to `""`. Resolves to
+   * `{}` when the spec id is unknown.
+   *
+   * Use it to show key hints in a widget's UI that follow the user's
+   * `key_bindings` remapping.
+   *
+   * @param specId - The key spec id (the `id` passed to `createWidget({ keys })`).
+   *
+   * @example
+   * ```typescript
+   * const labels = await context.keyLabels("files");
+   * const copyHint = labels.copy;   // e.g. "y"
+   * ```
+   */
+  keyLabels(specId: string): Promise<Record<string, string>>;
 
   // -------------------------------------------------------------------------
   // UI feedback

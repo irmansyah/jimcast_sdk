@@ -1,4 +1,4 @@
-// [sdk] packages/sdk/src/rpc.ts
+// packages/sdk/src/rpc.ts
 
 import { createInterface } from "node:readline";
 import type { Plugin } from "./command.js";
@@ -25,8 +25,10 @@ import type { WidgetKeyContext } from "./widgetKeys.js";
 import {
   boundCliSpecs,
   boundKeySpecs,
+  boundNavSpecs,
   toCliWire,
   toKeyWire,
+  toNavWire,
   validateSpecs,
   type Bound,
 } from "./specs.js";
@@ -52,6 +54,16 @@ import {
   type SearchResultItem,
   type WidgetDispatchArgs,
 } from "@jimcast/protocol";
+
+// ---------------------------------------------------------------------------
+// Debug logging (opt-in): JIMCAST_DEBUG=1. stdout is the RPC channel, so this
+// writes to stderr only.
+// ---------------------------------------------------------------------------
+
+const DEBUG = process.env.JIMCAST_DEBUG === "1";
+const dbg = (...a: unknown[]): void => {
+  if (DEBUG) console.error("[jimcast-sdk]", ...a);
+};
 
 // ---------------------------------------------------------------------------
 // Transport
@@ -121,6 +133,7 @@ export class RpcTransport {
           (result) => this.respond(req.id, result),
           (err: unknown) => {
             const msg = err instanceof Error ? err.message : String(err);
+            dbg(`request "${req.command}" failed:`, msg);
             this.respondError(req.id, msg);
           },
         );
@@ -256,8 +269,8 @@ function serializeContent(scope: string, content: WidgetContent<boolean>, ctx: E
 // Core expects `section` in snake_case ([core] RenderWidgetResult.section);
 // WidgetSectionOptions is camelCase for authoring. `undefined` fields are
 // dropped by JSON.stringify, so core's defaults still apply.
-// `show_in` and `repeat` are sent for forward compatibility: core's external
-// widget source does not read them yet (see CORE_CHANGES.md).
+// `show_in` and `repeat` are sent so core can read them (externalWidgets.ts
+// stores `repeat` via noteExternalRenderRepeat).
 function serializeSection(widget: AnyWidget): unknown {
   const section: WidgetSectionOptions = widget.section ?? {};
   return {
@@ -280,6 +293,7 @@ export async function bootstrapPlugin(plugin: Plugin): Promise<void> {
   for (const problem of validateSpecs(plugin)) {
     console.error(`[jimcast-sdk] ${plugin.name}: ${problem}`);
   }
+  dbg(`${plugin.name}: started (debug on)`);
 
   let transport: RpcTransport;
 
@@ -307,7 +321,8 @@ async function renderOwn(
 ): Promise<WidgetContent<boolean> | null> {
   if (widget.render)      return widget.render(ctx, params);
   if (widget.renderQuery) return widget.renderQuery(ctx, query ?? "");
-  throw new Error(`Widget "${widget.id}" defines neither render nor renderQuery`);
+  // Both checks above narrow `widget` to `never`, so read the id without narrowing.
+  throw new Error(`Widget "${(widget as { id: string }).id}" defines neither render nor renderQuery`);
 }
 
 /** dispatch(): plugin -> core -> frontend. Resolves after core re-rendered the widget. */
@@ -321,9 +336,12 @@ function makeDispatch(
       widgetId: bound.widgetId,
       owns:     bound.owns,
       item:     serializeItem(`${bound.widgetId}:dispatch`, item, ctx),
-      focus:    opts?.focus,
+      // conditional spread: `focus: undefined` is rejected by exactOptionalPropertyTypes
+      ...(opts?.focus ? { focus: opts.focus } : {}),
     };
+    dbg(`dispatch ${bound.widgetId} item=${item.id} owns=${JSON.stringify(bound.owns)}`);
     await transport.send(HOST_WIDGET_DISPATCH, payload as unknown as Record<string, unknown>, DISPATCH_TIMEOUT_MS);
+    dbg(`dispatch done item=${item.id}`);
   };
 }
 
@@ -431,6 +449,7 @@ async function handleCoreRequest(
 
     const context = buildContext(envContext, buildHostContext(rawHost), transport, plugin);
 
+    dbg(`renderWidget ${widgetId}`);
     const content = await renderOwn(widget, context, query, params);
     if (content == null) return { content: null };
 
@@ -443,9 +462,23 @@ async function handleCoreRequest(
   // ── invokeWidgetAction ────────────────────────────────────────────────────
   if (command === "invokeWidgetAction") {
     const { fnId, values } = args as { fnId: string; values?: Record<string, string> };
+    dbg(`invokeWidgetAction ${fnId}`);
+
+    if (fnId.startsWith("nav:")) {
+      const [, specId, side, enc] = fnId.split(":");   // enc is URI-encoded, so it has no ":"
+      const bound = boundNavSpecs(plugin).find((s) => s.id === specId);
+      const fn = side === "left" ? bound?.spec.left : bound?.spec.right;
+      if (!bound || !fn) throw new Error(`No nav handler: ${fnId}`);
+      const ctx = buildContext({} as EnvContext, buildHostContext({}), transport, plugin);
+      await fn(ctx, decodeURIComponent(enc ?? ""));
+      dbg(`nav done ${fnId}`);
+      return {};
+    }
+
     const entry = widgetActionRegistry.get(fnId);
     if (!entry) throw new Error(`Unknown widget action fn: ${fnId}`);
     await entry.fn(values);
+    dbg(`invokeWidgetAction done ${fnId}`);
     return {};
   }
 
@@ -456,7 +489,9 @@ async function handleCoreRequest(
     const result: ListWidgetSpecsResult = {
       cli:  boundCliSpecs(plugin).map(toCliWire),
       keys: boundKeySpecs(plugin).map(toKeyWire),
+      nav:  boundNavSpecs(plugin).map(toNavWire),
     };
+    dbg(`listWidgetSpecs cli=${result.cli.length} keys=${result.keys.length}`);
     return result;
   }
 
@@ -486,6 +521,7 @@ async function handleCoreRequest(
       dispatch: makeDispatch(transport, bound, base),
       showBar:  () => { showBar = true; },
     };
+    dbg(`runWidgetCli ${a.spec} ${a.command}`);
     const value = await cmd.run(ctx);
     return { value: value ?? null, showBar } satisfies RunWidgetCliResult;
   }
@@ -493,6 +529,7 @@ async function handleCoreRequest(
   // ── runWidgetKey ──────────────────────────────────────────────────────────
   if (command === RUN_WIDGET_KEY) {
     const a = args as RunWidgetKeyArgs;
+    dbg(`runWidgetKey ${a.spec}.${a.action} focused=${a.focusedItemId ?? "null"}`);
     const bound = boundKeySpecs(plugin).find((s) => s.id === a.spec);
     if (!bound) throw new Error(`Unknown widget key spec: ${a.spec}`);
     const action = bound.spec.actions.find((x) => x.id === a.action);
@@ -510,6 +547,7 @@ async function handleCoreRequest(
       dispatch:      makeDispatch(transport, bound, base),
     };
     await action.run(ctx);
+    dbg(`runWidgetKey done ${a.spec}.${a.action}`);
     return {};
   }
 

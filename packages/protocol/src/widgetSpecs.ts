@@ -53,9 +53,20 @@ export interface WidgetKeySpecWire {
   actions:  WidgetKeyActionWire[]
 }
 
+export interface WidgetNavSpecWire {
+  id: string;
+  widgetId: string;
+  owns: string[];
+  stickyFocus?: boolean;
+  /** Row ids are `prefix + absolute path`; used to compute where the cursor lands. */
+  tree?: { prefix: string };
+  horizontal: { left: boolean; right: boolean };
+}
+
 export interface ListWidgetSpecsResult {
   cli:  WidgetCliSpecWire[]
   keys: WidgetKeySpecWire[]
+  nav?: WidgetNavSpecWire[];
 }
 
 /** envContext / hostContext are optional: the handler tolerates their absence. */

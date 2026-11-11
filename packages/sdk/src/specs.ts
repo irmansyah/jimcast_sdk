@@ -3,11 +3,15 @@
 // Internal: collects the cli/keys specs declared on a plugin's widgets and
 // converts them to wire form. Not exported from the package root.
 import type { Plugin } from "./command.js";
-import type { WidgetCliSpec } from "./widgetCli.js";
-import type { WidgetKeySpec } from "./widgetKeys.js";
+import type { WidgetCliCommand, WidgetCliSpec } from "./widgetCli.js";
+import type { WidgetKeyAction, WidgetKeySpec } from "./widgetKeys.js";
+import type { WidgetNavSpec } from "./widgetNav.js";
+import type { WidgetNavSpecWire } from "@jimcast/protocol";
 import {
   parseKey,
+  type WidgetCliCommandWire,
   type WidgetCliSpecWire,
+  type WidgetKeyActionWire,
   type WidgetKeySpecWire,
 } from "@jimcast/protocol";
 
@@ -38,23 +42,51 @@ export function boundKeySpecs(plugin: Plugin): Bound<WidgetKeySpec>[] {
   );
 }
 
+// Optional fields are added only when set: with exactOptionalPropertyTypes,
+// `title: undefined` is not assignable to `title?: string`.
+const commandWire = (c: WidgetCliCommand): WidgetCliCommandWire => ({
+  id: c.id,
+  ...(c.args ? { args: [...c.args] } : {}),
+  ...(c.title !== undefined ? { title: c.title } : {}),
+  ...(c.description !== undefined ? { description: c.description } : {}),
+});
+
+const actionWire = (a: WidgetKeyAction): WidgetKeyActionWire => ({
+  id: a.id,
+  ...(a.title !== undefined ? { title: a.title } : {}),
+  default: typeof a.default === "string" ? a.default : [...a.default],
+});
+
 export const toCliWire = (b: Bound<WidgetCliSpec>): WidgetCliSpecWire => ({
   id: b.id,
   widgetId: b.widgetId,
   owns: b.owns,
-  commands: b.spec.commands.map(({ id, args, title, description }) => ({
-    id, args: args ? [...args] : undefined, title, description,
-  })),
+  commands: b.spec.commands.map(commandWire),
 });
 
 export const toKeyWire = (b: Bound<WidgetKeySpec>): WidgetKeySpecWire => ({
   id: b.id,
   widgetId: b.widgetId,
   owns: b.owns,
-  actions: b.spec.actions.map(({ id, title, default: d }) => ({
-    id, title, default: typeof d === "string" ? d : [...d],
-  })),
+  actions: b.spec.actions.map(actionWire),
 });
+
+export const toNavWire = (b: Bound<WidgetNavSpec>): WidgetNavSpecWire => ({
+  id: b.id,
+  widgetId: b.widgetId,
+  owns: b.owns,
+  ...(b.spec.stickyFocus ? { stickyFocus: true } : {}),
+  ...(b.spec.tree ? { tree: { prefix: b.spec.tree.prefix } } : {}),
+  horizontal: { left: !!b.spec.left, right: !!b.spec.right },
+});
+
+export function boundNavSpecs(plugin: Plugin): Bound<WidgetNavSpec>[] {
+  return (plugin.widgets ?? []).flatMap((w) =>
+    w.nav
+      ? [{ id: w.nav.id ?? lastSegment(w.id), widgetId: w.id, owns: prefixes(w.nav.owns), spec: w.nav }]
+      : [],
+  );
+}
 
 /** Human-readable problems; bootstrapPlugin logs them to stderr. Empty = fine. */
 export function validateSpecs(plugin: Plugin): string[] {
@@ -86,5 +118,10 @@ export function validateSpecs(plugin: Plugin): string[] {
       }
     }
   }
+  for (const b of boundNavSpecs(plugin)) {
+    if (!b.owns.length) errors.push(`nav spec "${b.id}": \`owns\` is empty`);
+    if ((b.spec.left || b.spec.right) && !b.spec.tree) errors.push(`nav spec "${b.id}": left/right need \`tree\``);
+  }
   return errors;
 }
+

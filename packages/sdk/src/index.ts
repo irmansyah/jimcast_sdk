@@ -124,3 +124,4 @@ export type {
 } from "./widgetKeys.js";
 export { parseKey, keyLabel, resolveBindings } from "@jimcast/protocol";
 export type { ParsedKey, KeyBindingsConfig } from "@jimcast/protocol";
+export type { WidgetNavSpec, WidgetNavHandler } from "./widgetNav.js";

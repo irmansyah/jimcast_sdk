@@ -23,6 +23,7 @@
 import type { WidgetCliSpec } from "./widgetCli.js";
 import type { WidgetKeySpec } from "./widgetKeys.js";
 import type { ExecutionContext } from "./context.js";
+import type { WidgetNavSpec } from "./widgetNav.js";
 
 // ---------------------------------------------------------------------------
 // Color tokens
@@ -336,6 +337,7 @@ export interface WidgetDescriptorBase<Exp extends WidgetDescriptorExpandable | u
   readonly expandable?: Exp;
   readonly cli?:  WidgetCliSpec;
   readonly keys?: WidgetKeySpec;
+  readonly nav?: WidgetNavSpec;
 }
 
 /**
