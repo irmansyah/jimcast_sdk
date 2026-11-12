@@ -1,4 +1,4 @@
-// packages/sdk/src/rpc.ts
+// [sdk] packages/sdk/src/rpc.ts
 
 import { createInterface } from "node:readline";
 import type { Plugin } from "./command.js";

@@ -254,6 +254,13 @@ type WidgetDatasVariant<E extends boolean> =
       readonly direction?: 'column' | 'row'
       readonly gap?:       number
     }
+  | { readonly type: 'tiles'
+      readonly datas:     readonly WidgetItem<E>[]
+      readonly columns?:  number
+      readonly gap?:      number
+      readonly labels?:   boolean
+      readonly caption?:  boolean
+    }
 
 /** Everything a plugin widget can render. Mirrors core's WidgetContent. */
 export type WidgetContent<E extends boolean = false> =
