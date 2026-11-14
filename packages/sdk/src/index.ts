@@ -3,14 +3,8 @@
 // Command definition and plugin manifest
 export {
   definePlugin,
-  // createCommand,
-  // createCommandGroup,
 } from "./command.js";
 export type {
-  // Command,
-  // CommandDefinition,
-  // CommandGroup,
-  // CommandResult,
   Plugin,
   PluginDefinition,
 } from "./command.js";
@@ -62,7 +56,6 @@ export {
   createTmuxTerminalWidget,
   createTmuxTerminalWidgets,
   buildTmuxSessionAttachScript,
-  buildTmuxAttachScript,
 } from "./widget.js";
 export type {
   Widget,
@@ -103,7 +96,6 @@ export type {
   WidgetExpandableChildCustom,
   // tmux
   TerminalPanelConfig,
-  WidgetExpandableTerminalConfig,
   WidgetExpandableTerminalsConfig,
 } from "./widget.js";
 // Themes
@@ -125,3 +117,4 @@ export type {
 export { parseKey, keyLabel, resolveBindings } from "@jimcast/protocol";
 export type { ParsedKey, KeyBindingsConfig } from "@jimcast/protocol";
 export type { WidgetNavSpec, WidgetNavHandler } from "./widgetNav.js";
+export { pluginId, qualifyWidgetId, pluginDataDir, pluginDataFile } from "./identity.js";

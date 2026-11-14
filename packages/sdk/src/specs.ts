@@ -22,14 +22,13 @@ export interface Bound<S> {
   spec:     S;
 }
 
-const lastSegment = (id: string) => id.split(".").pop() ?? id;
 const prefixes = (o: string | readonly string[]) =>
   (typeof o === "string" ? [o] : [...o]).filter(Boolean);
 
 export function boundCliSpecs(plugin: Plugin): Bound<WidgetCliSpec>[] {
   return (plugin.widgets ?? []).flatMap((w) =>
     w.cli
-      ? [{ id: w.cli.id ?? lastSegment(w.id), widgetId: w.id, owns: prefixes(w.cli.owns), spec: w.cli }]
+      ? [{ id: w.cli.id ?? w.id, widgetId: w.id, owns: prefixes(w.cli.owns), spec: w.cli }]
       : [],
   );
 }
@@ -37,7 +36,7 @@ export function boundCliSpecs(plugin: Plugin): Bound<WidgetCliSpec>[] {
 export function boundKeySpecs(plugin: Plugin): Bound<WidgetKeySpec>[] {
   return (plugin.widgets ?? []).flatMap((w) =>
     w.keys
-      ? [{ id: w.keys.id ?? lastSegment(w.id), widgetId: w.id, owns: prefixes(w.keys.owns), spec: w.keys }]
+      ? [{ id: w.keys.id ?? w.id, widgetId: w.id, owns: prefixes(w.keys.owns), spec: w.keys }]
       : [],
   );
 }
@@ -83,7 +82,7 @@ export const toNavWire = (b: Bound<WidgetNavSpec>): WidgetNavSpecWire => ({
 export function boundNavSpecs(plugin: Plugin): Bound<WidgetNavSpec>[] {
   return (plugin.widgets ?? []).flatMap((w) =>
     w.nav
-      ? [{ id: w.nav.id ?? lastSegment(w.id), widgetId: w.id, owns: prefixes(w.nav.owns), spec: w.nav }]
+      ? [{ id: w.nav.id ?? w.id, widgetId: w.id, owns: prefixes(w.nav.owns), spec: w.nav }]
       : [],
   );
 }

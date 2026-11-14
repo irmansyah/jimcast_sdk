@@ -7,14 +7,20 @@
  * slot in the bar layout. Users control which slot via ~/.jimcast/config.json
  * (`widget_slot`) or a profile's `section_slot`.
  *
+ * Widget ids: the plugin id is defined once, in package.json `name`. A widget
+ * declares only a LOCAL id:
+ *   - no `id`        -> the plugin's main widget (full id = plugin id)
+ *   - `id: "rows"`   -> `<plugin id>.rows`
+ * Local ids contain no dots. `createWidget` stores the full id on the widget.
+ *
  * Relationship to core "panels": a panel is the user-facing config shape
  * (terminal, website, webview, widget...). A plugin never writes panel config;
  * it ships widgets. A user opens a plugin widget as a panel with
- * `{ kind: 'external-component', id: '<widgetId>' }` (rendered through
- * render_widget) or `{ kind: 'external-custom', id: '<widgetId>' }` (rendered
- * through the plugin's `renderExpandableChild`). NOTE: core's `kind: 'widget'`
- * panel only resolves core-internal widgets (`jimcast-internal.*`); it can NOT
- * reach a plugin widget.
+ * `{ kind: 'external-component', id: '<full widget id>' }` (rendered through
+ * render_widget) or `{ kind: 'external-custom', id: '<full widget id>' }`
+ * (rendered through the plugin's `renderExpandableChild`). NOTE: core's
+ * `kind: 'widget'` panel only resolves core-internal widgets
+ * (`com.jimcast.internal.*`); it can NOT reach a plugin widget.
  *
  * The types below mirror core's frontend/src/domain/widget/types.ts for
  * everything that can cross the JSON boundary.
@@ -24,6 +30,7 @@ import type { WidgetCliSpec } from "./widgetCli.js";
 import type { WidgetKeySpec } from "./widgetKeys.js";
 import type { ExecutionContext } from "./context.js";
 import type { WidgetNavSpec } from "./widgetNav.js";
+import { qualifyWidgetId } from "./identity.js";
 
 // ---------------------------------------------------------------------------
 // Color tokens
@@ -169,6 +176,9 @@ export interface ImageTarget {
 }
 
 // ── Panel content (JSON-safe subset of core's WidgetExpandableChild) ──────────
+//
+// `widgetId` in these children goes to core, which needs FULL widget ids.
+// Build them with `qualifyWidgetId("rows")`.
 
 /** Another widget of THIS plugin, rendered in place. */
 export interface WidgetPanelChildWidget {
@@ -237,8 +247,6 @@ export interface WidgetGroupSection<E extends boolean = false> {
   height?:     number
   maxHeight?:  number
   scrollable?: boolean
-  /** @deprecated Not in core's WidgetGroupSection; core ignores it. */
-  section?:    Pick<WidgetSectionOptions, 'titleShow'> & { title?: string }
 }
 
 type WidgetDatasVariant<E extends boolean> =
@@ -288,6 +296,7 @@ export type WidgetContent<E extends boolean = false> =
 export interface WidgetExpandableChildWidget {
   id:       string
   kind:     'widget'
+  /** Another widget of this plugin: local id ("rows") or full id. */
   widgetId: string
   params?:  Record<string, string>
   keyBindings?: Record<string, unknown>
@@ -323,7 +332,7 @@ interface WidgetDescriptorRepeat {
  * `Section`. Sent over the wire in snake_case by rpc.ts's serializeSection.
  */
 export interface WidgetSectionOptions {
-  /** Section title. Default: derived by core from the widget id ("acme.todo-list" -> "Todo List"). */
+  /** Section title. Default: derived by core from the widget id's last segment ("todo-list" -> "Todo List"). */
   title?: string
   /** Show the title above the content. Default: true. */
   titleShow?: boolean
@@ -336,7 +345,11 @@ export interface WidgetSectionOptions {
 }
 
 export interface WidgetDescriptorBase<Exp extends WidgetDescriptorExpandable | undefined = undefined> {
-  readonly id:          string;
+  /**
+   * Local id, no dots. Omit for the plugin's main widget (full id = plugin id).
+   * Extra widgets: "rows" -> "<plugin id>.rows". `createWidget` returns the full id.
+   */
+  readonly id?:         string;
   readonly showIn?:     WidgetMode[];
   readonly action?:     WidgetAction<ExpandEnabled<Exp>>;
   readonly repeat?:     WidgetDescriptorRepeat;
@@ -364,8 +377,9 @@ type WidgetDescriptorRenderVariant<E extends boolean> =
 export type WidgetDescriptor<Exp extends WidgetDescriptorExpandable | undefined = undefined> =
   WidgetDescriptorBase<Exp> & WidgetDescriptorRenderVariant<ExpandEnabled<Exp>>
 
+/** A created widget. `id` is always the FULL id (plugin id or `<plugin id>.<local>`). */
 export type Widget<Exp extends WidgetDescriptorExpandable | undefined = undefined> =
-  WidgetDescriptor<Exp> & { readonly _type: "widget" };
+  WidgetDescriptor<Exp> & { readonly _type: "widget"; readonly id: string };
 
 export type AnyWidget = Widget<WidgetDescriptorExpandable | undefined>;
 
@@ -375,21 +389,26 @@ export type AnyWidget = Widget<WidgetDescriptorExpandable | undefined>;
 
 /**
  * Creates a widget — a persistent UI block rendered in the command bar.
+ * The id is qualified with the plugin id (package.json `name`), see the
+ * header comment.
  *
  * @example
  * ```typescript
- * const clockWidget = createWidget({
- *   id: "example.widget.clock",
+ * // main widget: full id = plugin id
+ * const main = createWidget({
  *   async render(ctx) {
  *     return { type: "text", data: { id: "now", attribute: { label1: new Date().toLocaleTimeString() } } };
  *   },
  * });
+ *
+ * // extra widget: full id = "<plugin id>.clock"
+ * const clock = createWidget({ id: "clock", render: () => ({ type: "divider" }) });
  * ```
  */
 export function createWidget<Exp extends WidgetDescriptorExpandable | undefined = undefined>(
   definition: WidgetDescriptor<Exp>
 ): Widget<Exp> {
-  return { ...definition, _type: "widget" };
+  return { ...definition, id: qualifyWidgetId(definition.id), _type: "widget" } as Widget<Exp>;
 }
 
 // ---------------------------------------------------------------------------
@@ -412,16 +431,11 @@ export interface TerminalPanelConfig {
   cmd:      string
   cwd?:     string
   /**
-   * tmux session to run in. Defaults to `window`, then to the widget id.
-   * Namespace per plugin (e.g. "myplugin-logs"). '.' and ':' become '-'.
+   * tmux session to run in. Defaults to the widget's full id.
+   * '.' and ':' become '-'.
    */
   session?: string
-  /** @deprecated Old shared-session model. Only used as a fallback session name. */
-  window?:  string
 }
-
-/** @deprecated use TerminalPanelConfig */
-export type WidgetExpandableTerminalConfig = TerminalPanelConfig
 
 export type WidgetExpandableTerminalsConfig = Record<string, TerminalPanelConfig>
 
@@ -449,33 +463,22 @@ export function buildTmuxSessionAttachScript(session: string, config: TerminalPa
 }
 
 /**
- * Same as buildTmuxSessionAttachScript, choosing the session from the config
- * (`session`, else `window`). Pass `fallbackSession` for configs that set neither.
- *
- * @deprecated The name predates per-panel sessions; prefer buildTmuxSessionAttachScript.
- */
-export function buildTmuxAttachScript(config: TerminalPanelConfig, fallbackSession = 'plugin-terminal'): string {
-  return buildTmuxSessionAttachScript(config.session ?? config.window ?? fallbackSession, config)
-}
-
-/**
  * Creates a widget that launches (or attaches to) a tmux-backed terminal for
- * one TerminalPanelConfig. Reference it as the target of a `kind: 'widget'`
- * WidgetExpandableChild.
+ * one TerminalPanelConfig. `id` is a local id (dotless). Reference it as the
+ * target of a `kind: 'widget'` WidgetExpandableChild.
  *
  * @example
  * ```typescript
- * const logs: TerminalPanelConfig = { label: "Logs", kind: "terminal", session: "myplugin-logs", cmd: "tail -f app.log" }
- * const logsTerminal = createTmuxTerminalWidget("myplugin.logs-terminal", logs)
+ * const logs: TerminalPanelConfig = { label: "Logs", kind: "terminal", cmd: "tail -f app.log" }
+ * const logsTerminal = createTmuxTerminalWidget("logs-terminal", logs)
  *
  * const myWidget = createWidget({
- *   id: "myplugin.main",
  *   expandable: true,
  *   render() {
  *     return {
  *       type: "rows",
  *       datas: [{ id: "logs", attribute: { label1: logs.label }, action: { then: "expand" } }],
- *       expandable: [{ id: "logs", kind: "widget", widgetId: "myplugin.logs-terminal" }],
+ *       expandable: [{ id: "logs", kind: "widget", widgetId: "logs-terminal" }],
  *     }
  *   },
  * })
@@ -490,11 +493,12 @@ export function createTmuxTerminalWidget(
   return createWidget({
     id,
     render(_ctx): WidgetContent {
+      const session = config.session ?? qualifyWidgetId(id)
       return {
         type: 'terminal',
         data: {
           cmd:  'sh',
-          args: ['-c', buildTmuxAttachScript(config, id)],
+          args: ['-c', buildTmuxSessionAttachScript(session, config)],
         },
       }
     },
@@ -503,9 +507,10 @@ export function createTmuxTerminalWidget(
 
 /**
  * Builds one createTmuxTerminalWidget per entry of a
- * WidgetExpandableTerminalsConfig. Returned widgets are keyed by
- * `${idPrefix}.${configKey}` — use that id as `widgetId` in the matching
- * expandable child. Entries without `session`/`window` use that id as session.
+ * WidgetExpandableTerminalsConfig. Returned widgets are keyed by the local id
+ * `${idPrefix}-${configKey}` (dotless) — use that id as `widgetId` in the
+ * matching expandable child. Entries without `session` use the widget's full
+ * id as session.
  */
 export function createTmuxTerminalWidgets(
   idPrefix: string,
@@ -514,7 +519,8 @@ export function createTmuxTerminalWidgets(
   const out: Record<string, Widget> = {}
   for (const [key, entry] of Object.entries(config)) {
     if (entry.kind !== 'terminal') continue
-    out[`${idPrefix}.${key}`] = createTmuxTerminalWidget(`${idPrefix}.${key}`, entry)
+    const local = `${idPrefix}-${key}`
+    out[local] = createTmuxTerminalWidget(local, entry)
   }
   return out
 }

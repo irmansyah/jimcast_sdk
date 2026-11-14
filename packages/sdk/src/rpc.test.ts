@@ -7,8 +7,6 @@ import type { SearchResultItem, Document } from '@jimcast/protocol'
 
 function makePlugin(overrides = {}) {
   return definePlugin({
-    name: 'test-plugin',
-    // commands: [],
     search: vi.fn(async (query: string): Promise<SearchResultItem[]> =>
       query === 'match'
         ? [{

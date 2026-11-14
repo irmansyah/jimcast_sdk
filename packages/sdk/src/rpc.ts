@@ -309,7 +309,10 @@ export async function bootstrapPlugin(plugin: Plugin): Promise<void> {
 // ---------------------------------------------------------------------------
 
 function findWidget(plugin: Plugin, widgetId: string): AnyWidget | undefined {
-  return plugin.widgets?.find((w) => w.id === widgetId);
+  const full = widgetId.startsWith(plugin.name + ".") || widgetId === plugin.name
+    ? widgetId
+    : `${plugin.name}.${widgetId}`;
+  return plugin.widgets?.find((w) => w.id === widgetId || w.id === full);
 }
 
 /** A widget defines exactly one of `render` / `renderQuery`; `renderQuery` may return null. */
