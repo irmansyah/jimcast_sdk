@@ -1,6 +1,6 @@
 # @jimcast/react-sdk
 
-Client/server SDK for building **webview plugins** for [jimcast-core](../../../jimcast-core) —
+Client/server SDK for building **webview plugins** for [Jimcast](https://github.com/irmansyah/jimcast-releases) —
 the transport layer between a sandboxed plugin iframe/webview and the host
 app, plus an optional Node-side backend process for plugins that need to
 talk to the host (shell exec, storage, toasts, clipboard, etc).
@@ -265,37 +265,33 @@ both output directories exist afterward:
 ls dist/ dist-backend/
 ```
 
-### 9. Install into jimcast-core
+### 9. Install into Jimcast
 
-Your dev checkout isn't automatically visible to `jimcast-core` — it reads
-installed plugins from `~/.jimcast/plugins/<name>/`, a separate location
-from wherever you're developing. Use `jimcast-core`'s sync script:
+Jimcast reads installed plugins from `~/.jimcast/plugins/<name>/`, which is
+separate from your dev checkout. After building, copy the output there:
 
 ```bash
-cd jimcast-core
-./scripts/sync-plugin.sh your-plugin
+mkdir -p ~/.jimcast/plugins/your-plugin
+cp -R dist dist-backend package.json ~/.jimcast/plugins/your-plugin/
 ```
 
-This builds your plugin, then copies `dist/`, `dist-backend/`, and
-`package.json` into `~/.jimcast/plugins/your-plugin/`. Re-run it after
-every change you want reflected in the running app.
+Re-run the copy after every change you want reflected in the running app.
 
-### 10. Register it as a quick tool
+### 10. Register it as a panel
 
-Add an entry to `~/.jimcast/config.json`:
+Add a `webview` panel to a slot in `~/.jimcast/config.json` (or a profile's `section_slot`):
 
 ```json
 {
-  "quick_tools": [
-    {
-      "id": "your-plugin",
-      "label": "Your Plugin",
-      "kind": "webview",
-      "entry": "dist/index.html"
-    }
-  ]
+  "widget_slot": {
+    "below-input": [
+      { "id": "your-plugin", "label": "Your Plugin", "kind": "webview", "entry": "dist/index.html" }
+    ]
+  }
 }
 ```
+
+A toggle panel (the default) works in `below-input` and `inside-scroll`. Add `"display": "inline"` to render it in place in any slot, though inline webviews don't receive arrow-key navigation. The plugin is the part of the id before the first `.`, so `your-plugin.docs` and `your-plugin.board` can be two panels backed by one plugin. To get a row of buttons, wrap panels in `{ "kind": "group", "id": "tools", "panels": [...] }`.
 
 Restart (or reload) jimcast-core, and your plugin should appear as a quick
 tool, rendering `dist/index.html` inside a sandboxed iframe.
@@ -375,10 +371,13 @@ and confirm the `.d.ts` files actually exist at the paths `exports` claims.
 
 **`<plugin> not found: No such file or directory`** when loading in
 jimcast-core — your dev build was never synced into
-`~/.jimcast/plugins/<name>/`. Run `./scripts/sync-plugin.sh <name>` from
-`jimcast-core`.
+`~/.jimcast/plugins/<name>/`. Re-copy your build into that folder (step 9).
 
 **Peer dependency conflicts with `vite`/`@vitejs/plugin-react`** — run
 `pnpm peers check` after changing either version; npm fails loudly on
 this, pnpm installs anyway and only warns, which can leave you on a
 combination that doesn't actually work at runtime.
+
+## License
+
+MIT — © 2026 Irmansyah
