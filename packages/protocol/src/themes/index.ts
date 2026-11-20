@@ -1,6 +1,8 @@
 // [sdk] packages/protocol/src/themes/index.ts
 
 import { defaultTheme }      from "./default.js";
+import { macosDarkTheme }    from "./macos-dark.js";
+import { macosLightTheme }   from "./macos-light.js";
 import { gruvboxDarkTheme }  from "./gruvbox-dark.js";
 import { gruvboxLightTheme } from "./gruvbox-light.js";
 import { catppuccinTheme }   from "./catppuccin.js";
@@ -10,6 +12,8 @@ import type { ThemeContext } from "./theme.js";
 
 export {
   defaultTheme,
+  macosDarkTheme,
+  macosLightTheme,
   gruvboxDarkTheme,
   gruvboxLightTheme,
   catppuccinTheme,
@@ -19,6 +23,8 @@ export {
 
 export type ThemeName =
   | "default"
+  | "macos-dark"
+  | "macos-light"
   | "gruvbox-dark"
   | "gruvbox-light"
   | "catppuccin"
@@ -27,6 +33,8 @@ export type ThemeName =
 
 const themes: Record<ThemeName, ThemeContext> = {
   "default":       defaultTheme,
+  "macos-dark":    macosDarkTheme,
+  "macos-light":   macosLightTheme,
   "gruvbox-dark":  gruvboxDarkTheme,
   "gruvbox-light": gruvboxLightTheme,
   "catppuccin":    catppuccinTheme,

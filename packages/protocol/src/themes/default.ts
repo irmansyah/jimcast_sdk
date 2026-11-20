@@ -1,5 +1,5 @@
 // [sdk] packages/protocol/src/themes/default.ts 
 
-import { gruvboxDarkTheme } from "./gruvbox-dark.js";
+import { macosDarkTheme } from "./macos-dark.js";
 
-export const defaultTheme = gruvboxDarkTheme;
+export const defaultTheme = macosDarkTheme;

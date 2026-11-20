@@ -1,0 +1,32 @@
+{
+  "name": "{{PLUGIN_ID}}",
+  "version": "0.1.0",
+  "description": "{{PLUGIN_DESCRIPTION}}",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "jimcast": {
+    "name": "{{PLUGIN_NAME}}",
+    "description": "{{PLUGIN_DESCRIPTION}}"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@jimcast/protocol": "file:../../packages/protocol",
+    "@jimcast/sdk": "file:../../packages/sdk"
+  },
+  "devDependencies": {
+    "vitest": "^1.4.0",
+    "@types/node": "^25.9.3",
+    "tsdown": "^0.22.2",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

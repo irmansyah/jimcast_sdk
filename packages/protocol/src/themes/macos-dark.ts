@@ -1,6 +1,6 @@
 import type { ThemeContext } from "./theme.js";
 
-export const macosTheme: ThemeContext = {
+export const macosDarkTheme: ThemeContext = {
   mode: "dark",
   colors: {
     bg:           "#1e1e1e",  // window background

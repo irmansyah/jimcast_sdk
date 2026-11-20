@@ -6,6 +6,8 @@
 // author importing @jimcast/sdk's theme exports) keeps working unchanged.
 export {
   defaultTheme,
+  macosDarkTheme,
+  macosLightTheme,
   gruvboxDarkTheme,
   gruvboxLightTheme,
   catppuccinTheme,

@@ -89,7 +89,9 @@ export function buildSectionLabelStyles(custom: unknown): Record<string, Section
   for (const [name, spec] of Object.entries(custom as Record<string, unknown>)) {
     if (!spec || typeof spec !== 'object' || Array.isArray(spec)) continue
     const s = spec as Record<string, unknown>
-    const parent = typeof s.extends === 'string' && all[s.extends] ? all[s.extends] : all[DEFAULT_SECTION_LABEL_STYLE]
+    const parent =
+      (typeof s.extends === 'string' ? all[s.extends] : undefined) ??
+      BUILTIN_SECTION_LABEL_STYLES[DEFAULT_SECTION_LABEL_STYLE]
     all[name] = overlay(parent, s)
   }
   return all
